@@ -25,6 +25,7 @@ jobs:
       v311: ${{ steps.v.outputs.v311 }}
       v312: ${{ steps.v.outputs.v312 }}
       v313: ${{ steps.v.outputs.v313 }}
+      reqfile: ${{ steps.reqfile.outputs.reqfile }}
     steps:
       - name: Get current date
         id: Date
@@ -68,6 +69,21 @@ jobs:
           echo "Values:"
           cat $GITHUB_OUTPUT
 
+      - name: Get requirements file
+        id: reqfile
+        run: |
+          set -euo pipefail
+          if [[ ${LOCK+x} ]]; then
+            echo "LOCK is set, using requirements-lock.txt"
+            echo "reqfile=requirements-lock.txt" >> $GITHUB_OUTPUT
+          else
+            echo "LOCK is not set, using requirements-dev.txt"
+            echo "reqfile=requirements-dev.txt" >> $GITHUB_OUTPUT
+          fi
+          echo -e "\nFile:\n$GITHUB_OUTPUT"
+          echo "Values:"
+          cat $GITHUB_OUTPUT
+
   Collect:
     runs-on: ubuntu-latest
     needs: [ Setup ]
@@ -100,7 +116,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            requirements-lock.txt
+            ${{ needs.Setup.outputs.reqfile }}
 
       - name: Create isolated build environment
         run: |
@@ -119,7 +135,7 @@ jobs:
             wheel
           python -m pip install \
             --require-hashes \
-            --requirement requirements-lock.txt
+            --requirement ${{ needs.Setup.outputs.reqfile }}
           python -m pip install \
             --no-deps \
             --editable .
@@ -145,7 +161,7 @@ jobs:
           corepack pack -o pypi/pypi-pack.tar.gz
           pip download \
             --dest pypi \
-            --requirement requirements-lock.txt
+            --requirement ${{ needs.Setup.outputs.reqfile }}
 
       - name: TARchive pypi directory
         run: |
@@ -203,7 +219,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            requirements-lock.txt
+            ${{ needs.Setup.outputs.reqfile }}
 
       - name: Create isolated build environment
         run: |
@@ -217,7 +233,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install \
             --require-hashes \
-            --requirement requirements-lock.txt
+            --requirement ${{ needs.Setup.outputs.reqfile }}
           python -m pip install \
             --no-deps \
             --editable .
@@ -343,7 +359,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            requirements-lock.txt
+            ${{ needs.Setup.outputs.reqfile }}
 
       - name: Create isolated build environment
         run: |
@@ -367,7 +383,7 @@ jobs:
             wheel
           python -m pip install \
             --require-hashes \
-            --requirement requirements-lock.txt
+            --requirement ${{ needs.Setup.outputs.reqfile }}
           python -m pip install \
             --no-deps \
             --editable .

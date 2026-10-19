@@ -25,6 +25,7 @@ jobs:
       v311: ${{ steps.v.outputs.v311 }}
       v312: ${{ steps.v.outputs.v312 }}
       v313: ${{ steps.v.outputs.v313 }}
+      reqfile: ${{ steps.reqfile.outputs.reqfile }}
     steps:
       - name: Get current date
         id: Date
@@ -64,6 +65,21 @@ jobs:
           echo "v312=${v312}" >> $GITHUB_OUTPUT
           echo "v313=${v313}" >> $GITHUB_OUTPUT
 
+          echo -e "\nFile:\n$GITHUB_OUTPUT"
+          echo "Values:"
+          cat $GITHUB_OUTPUT
+
+      - name: Get requirements file
+        id: reqfile
+        run: |
+          set -euo pipefail
+          if [[ ${LOCK+x} ]]; then
+            echo "LOCK is set, using requirements-lock.txt"
+            echo "reqfile=requirements-lock.txt" >> $GITHUB_OUTPUT
+          else
+            echo "LOCK is not set, using requirements-dev.txt"
+            echo "reqfile=requirements-dev.txt" >> $GITHUB_OUTPUT
+          fi
           echo -e "\nFile:\n$GITHUB_OUTPUT"
           echo "Values:"
           cat $GITHUB_OUTPUT
