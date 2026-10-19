@@ -1,0 +1,19 @@
+# Ignore .vagrant
+.vagrant*
+
+# Ignore subdirectories
+!.github/**
+dist/
+pypi/
+coverage/
+docs/
+
+# Ignore Files
+*.tgz
+*.tar.gz
+*.gz
+*.zip
+*.bundle
+*.log
+*.sha
+*.log
