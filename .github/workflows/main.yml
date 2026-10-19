@@ -116,7 +116,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            requirements-lock.txt
+            ${{ needs.Setup.outputs.reqfile }}
 
       - name: Create isolated build environment
         run: |
@@ -135,7 +135,7 @@ jobs:
             wheel
           python -m pip install \
             --require-hashes \
-            --requirement requirements-lock.txt
+            --requirement ${{ needs.Setup.outputs.reqfile }}
           python -m pip install \
             --no-deps \
             --editable .
@@ -161,7 +161,7 @@ jobs:
           corepack pack -o pypi/pypi-pack.tar.gz
           pip download \
             --dest pypi \
-            --requirement requirements-lock.txt
+            --requirement ${{ needs.Setup.outputs.reqfile }}
 
       - name: TARchive pypi directory
         run: |
@@ -219,7 +219,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            requirements-lock.txt
+            ${{ needs.Setup.outputs.reqfile }}
 
       - name: Create isolated build environment
         run: |
@@ -231,12 +231,15 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install \
-            --require-hashes \
-            --requirement requirements-lock.txt
-          python -m pip install \
-            --no-deps \
-            --editable .
+          if [[ ${LOCK+x} ]]; then
+            echo "Lock file is present."
+            python -m pip install \
+              --require-hashes \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          else
+            python -m pip install \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          fi
 
       - name: Restore pip cache artifact
         uses: actions/download-artifact@v8
@@ -359,7 +362,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            requirements-lock.txt
+            ${{ needs.Setup.outputs.reqfile }}
 
       - name: Create isolated build environment
         run: |
@@ -383,7 +386,7 @@ jobs:
             wheel
           python -m pip install \
             --require-hashes \
-            --requirement requirements-lock.txt
+            --requirement ${{ needs.Setup.outputs.reqfile }}
           python -m pip install \
             --no-deps \
             --editable .
