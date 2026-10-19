@@ -147,6 +147,7 @@ jobs:
       - name: Record tool versions
         run: |
           set -euo pipefail
+          source .venv/bin/activate
           python --version
           python -m pip --version
           python -m piptools --version
