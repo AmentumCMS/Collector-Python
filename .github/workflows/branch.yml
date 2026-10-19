@@ -270,7 +270,7 @@ jobs:
           severity-cutoff: high
           fail-build: false
           output-format: table
-          output-file: grype-report.txt
+          output-file: grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
 
       - name: Security - Scan SBOM with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
@@ -281,7 +281,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM,LOW
           ignore-unfixed: true
           format: table
-          output: trivy-report.txt
+          output: trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
           exit-code: 0
 
       - name: Security - Write summary
@@ -294,7 +294,7 @@ jobs:
             echo "## Grype SBOM Scan"
             echo ""
 
-            if [ -f grype-report.txt ]; then
+            if [ -f grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt ]; then
               echo "### Severity Counts"
               awk '
               {
@@ -309,12 +309,12 @@ jobs:
                 print "- Medium:", counts["medium"]+0
                 print "- Low:", counts["low"]+0
               }
-              ' grype-report.txt
+              ' grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
 
               echo ""
               echo "### Top Grype Findings"
               echo '```'
-              awk 'NR>1 && ($6=="Critical"||$6=="High"||$6=="Medium"||$6=="Low")' grype-report.txt | head -n 50
+              awk 'NR>1 && ($6=="Critical"||$6=="High"||$6=="Medium"||$6=="Low")' grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt | head -n 50
               echo '```'
             else
               echo "grype-report.txt not found."
@@ -323,7 +323,7 @@ jobs:
             echo ""
             echo "## Trivy Filesystem Scan"
             echo ""
-            if [ -f trivy-report.txt ]; then
+            if [ -f trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt ]; then
               echo "### Top Trivy Findings"
               echo '```'
               head -n 100 trivy-report.txt
@@ -337,11 +337,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ vars.COLLECTOR }}-security-scans-${{ needs.Setup.outputs.Date }}
+          name: ${{ vars.COLLECTOR }}-security-scans-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}
           path: |
             app-sbom.cdx.json
-            grype-report.txt
-            trivy-report.txt
+            grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
+            trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
           if-no-files-found: warn
 
   MakeISO:
