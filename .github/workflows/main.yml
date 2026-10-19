@@ -393,18 +393,15 @@ jobs:
             setuptools \
             wheel
           if [[ ${LOCK+x} ]]; then
-            echo "LOCK is set."
+            echo -e "\nLOCK is set."
             python -m pip install \
               --require-hashes \
               --requirement ${{ needs.Setup.outputs.reqfile }}
           else
-            echo "LOCK is not set."
+            echo -e "\nLOCK is not set."
             python -m pip install \
               --requirement ${{ needs.Setup.outputs.reqfile }}
           fi
-          python -m pip install \
-            --no-deps \
-            --editable .
 
       - name: Install mkisofs
         run: |
