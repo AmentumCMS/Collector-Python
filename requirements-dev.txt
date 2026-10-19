@@ -13,3 +13,4 @@ reprotest
 twine
 virtualenv
 wheel
+ruff
