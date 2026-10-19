@@ -1,5 +1,6 @@
 -r requirements.txt
 
+cyclonedx-bom
 diffoscope
 pytest
 pytest-cov
@@ -8,4 +9,7 @@ isort
 flake8
 mypy
 yamllint
+reprotest
 twine
+virtualenv
+wheel
