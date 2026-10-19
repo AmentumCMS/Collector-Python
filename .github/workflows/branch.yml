@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       Date: ${{ steps.date.outputs.date }}
+      v309: ${{ steps.v.outputs.v309 }}
       v311: ${{ steps.v.outputs.v311 }}
       v312: ${{ steps.v.outputs.v312 }}
       v313: ${{ steps.v.outputs.v313 }}
@@ -61,14 +62,17 @@ jobs:
               | tail -1
           }
 
+          v309=$(get_version 3.9)
           v311=$(get_version 3.11)
           v312=$(get_version 3.12)
           v313=$(get_version 3.13)
 
+          echo "The latest Python 3.9 version is: $v309"
           echo "The latest Python 3.11 version is: $v311"
           echo "The latest Python 3.12 version is: $v312"
           echo "The latest Python 3.13 version is: $v313"
 
+          echo "v309=${v309}" >> $GITHUB_OUTPUT
           echo "v311=${v311}" >> $GITHUB_OUTPUT
           echo "v312=${v312}" >> $GITHUB_OUTPUT
           echo "v313=${v313}" >> $GITHUB_OUTPUT
@@ -104,6 +108,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
+          - ${{ needs.Setup.outputs.v309 }}
           - ${{ needs.Setup.outputs.v311 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
@@ -212,6 +217,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version:
+          - ${{ needs.Setup.outputs.v309 }}
           - ${{ needs.Setup.outputs.v311 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
@@ -268,13 +274,13 @@ jobs:
         uses: anchore/sbom-action@v0
         with:
           format: cyclonedx-json
-          output-file: app-sbom.cdx.json
+          output-file: app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
           upload-artifact: false
 
       - name: Security - Scan SBOM with Grype
         uses: anchore/scan-action@v7
         with:
-          sbom: app-sbom.cdx.json
+          sbom: app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
           severity-cutoff: high
           fail-build: false
           output-format: table
@@ -284,7 +290,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: sbom
-          scan-ref: app-sbom.cdx.json
+          scan-ref: app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
           scanners: vuln
           severity: CRITICAL,HIGH,MEDIUM,LOW
           ignore-unfixed: true
@@ -325,7 +331,7 @@ jobs:
               awk 'NR>1 && ($6=="Critical"||$6=="High"||$6=="Medium"||$6=="Low")' grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt | head -n 50
               echo '```'
             else
-              echo "grype-report.txt not found."
+              echo "grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt not found."
             fi
 
             echo ""
@@ -337,7 +343,7 @@ jobs:
               head -n 100 trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
               echo '```'
             else
-              echo "trivy-report.txt not found."
+              echo "trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt not found."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -347,7 +353,7 @@ jobs:
         with:
           name: ${{ vars.COLLECTOR }}-security-scans-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}
           path: |
-            app-sbom.cdx.json
+            app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
             grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
             trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
           if-no-files-found: warn
@@ -369,10 +375,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ needs.Setup.outputs.v309 }}
         uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ needs.Setup.outputs.v309 }}
           cache: pip
           cache-dependency-path: |
             pyproject.toml
