@@ -1,6 +1,6 @@
 # What is this?
 
-[![Release](https://github.com/amentumcms/Collector-Python/actions/workflows/yarn-main.yml/badge.svg?branch=main)](https://github.com/amentumcms/Collector-Python/actions/workflows/yarn-main.yml)
+[![Release](https://github.com/amentumcms/Collector-Python/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/amentumcms/Collector-Python/actions/workflows/main.yml)
 
 This is a project that automatically collects artifacts to ease in air-gapped transfer from the internet.
 
