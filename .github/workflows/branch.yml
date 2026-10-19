@@ -164,7 +164,6 @@ jobs:
       - name: Collect pypi artifacts
         run: |
           mkdir -p pypi-${{ matrix.python-version }}
-          corepack pack -o pypi-${{ matrix.python-version }}/pypi-pack.tar.gz
           pip download \
             --dest pypi-${{ matrix.python-version }} \
             --requirement ${{ needs.Setup.outputs.reqfile }}
