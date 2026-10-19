@@ -143,9 +143,6 @@ jobs:
             python -m pip install \
               --requirement ${{ needs.Setup.outputs.reqfile }}
           fi
-          python -m pip install \
-            --no-deps \
-            --editable .
 
       - name: Record tool versions
         run: |
@@ -164,22 +161,22 @@ jobs:
 
       - name: Collect pypi artifacts
         run: |
-          mkdir -p pypi
-          corepack pack -o pypi/pypi-pack.tar.gz
+          mkdir -p pypi-${{ matrix.python-version }}
+          corepack pack -o pypi-${{ matrix.python-version }}/pypi-pack.tar.gz
           pip download \
-            --dest pypi \
+            --dest pypi-${{ matrix.python-version }} \
             --requirement ${{ needs.Setup.outputs.reqfile }}
 
       - name: TARchive pypi directory
         run: |
-          tar -cvI pigz -f ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz \
-            pypi requirements*.txt \
-            | tee ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz.txt
+          tar -cvI pigz -f ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz \
+            pypi-${{ matrix.python-version }} requirements*.txt \
+            | tee ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz.txt
 
       - name: TARchive pypi-cache storage directory SHA HASH
         run: |
-          sha256sum -b ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz | tee \
-            ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz.sha
+          sha256sum -b ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz | tee \
+            ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz.sha
 
       - name: Artifact Listings
         run: |
@@ -189,8 +186,8 @@ jobs:
       - name: Upload pypi-cache artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz
-          path: ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz*
+          name: ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz
+          path: ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz*
           if-no-files-found: error
 
   SecurityScan:
@@ -252,11 +249,11 @@ jobs:
       - name: Restore pip cache artifact
         uses: actions/download-artifact@v8
         with:
-          name: ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz
+          name: ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz
 
       - name: Extract pip cache
         run: |
-          tar -xzvf ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz
+          tar -xzvf ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz
 
       - name: Security - Generate app SBOM
         uses: anchore/sbom-action@v0
