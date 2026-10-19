@@ -133,9 +133,16 @@ jobs:
             pip-tools \
             setuptools \
             wheel
-          python -m pip install \
-            --require-hashes \
-            --requirement ${{ needs.Setup.outputs.reqfile }}
+          if [[ ${LOCK+x} ]]; then
+            echo "LOCK is set."
+            python -m pip install \
+              --require-hashes \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          else
+            echo "LOCK is not set."
+            python -m pip install \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          fi
           python -m pip install \
             --no-deps \
             --editable .
@@ -232,11 +239,12 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           if [[ ${LOCK+x} ]]; then
-            echo "Lock file is present."
+            echo "LOCK is set."
             python -m pip install \
               --require-hashes \
               --requirement ${{ needs.Setup.outputs.reqfile }}
           else
+            echo "LOCK is not set."
             python -m pip install \
               --requirement ${{ needs.Setup.outputs.reqfile }}
           fi
@@ -384,9 +392,16 @@ jobs:
             pip \
             setuptools \
             wheel
-          python -m pip install \
-            --require-hashes \
-            --requirement ${{ needs.Setup.outputs.reqfile }}
+          if [[ ${LOCK+x} ]]; then
+            echo "LOCK is set."
+            python -m pip install \
+              --require-hashes \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          else
+            echo "LOCK is not set."
+            python -m pip install \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          fi
           python -m pip install \
             --no-deps \
             --editable .
