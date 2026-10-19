@@ -111,7 +111,11 @@ jobs:
       - name: Install the locked development toolchain
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
+          python -m pip install \
+            --upgrade \
+            pip \
+            setuptools \
+            wheel
           python -m pip install \
             --require-hashes \
             --requirement requirements-toolchain.txt
@@ -344,12 +348,21 @@ jobs:
         run: |
           set -euo pipefail
           python -m venv .venv
+          python -m pip install \
+            --upgrade \
+            pip \
+            setuptools \
+            wheel
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install the locked development toolchain
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
+          python -m pip install \
+            --upgrade \
+            pip \
+            setuptools \
+            wheel
           python -m pip install \
             --require-hashes \
             --requirement requirements-toolchain.txt
