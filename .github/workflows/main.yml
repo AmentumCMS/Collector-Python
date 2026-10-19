@@ -27,11 +27,19 @@ jobs:
       v313: ${{ steps.v.outputs.v313 }}
       reqfile: ${{ steps.reqfile.outputs.reqfile }}
     steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+          lfs: true
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Get current date
         id: Date
         run: |
           echo -n "Getting Date: "
-          echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+          echo "date=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
           echo -e "$DATE\nFile:\n$GITHUB_OUTPUT"
           echo -e "\nValues:"
           cat $GITHUB_OUTPUT
@@ -674,6 +682,19 @@ jobs:
       contents: write
       pull-requests: read
     steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+          lfs: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Git
+        run: |
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
+
       - name: Download Artifacts
         uses: actions/download-artifact@v8
         with:
