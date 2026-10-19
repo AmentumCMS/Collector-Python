@@ -150,10 +150,11 @@ jobs:
           source .venv/bin/activate
           python --version
           python -m pip --version
-          python -m piptools --version
+          # python -m pip-tools --version
           ruff --version
           mypy --version
           pytest --version
+          diffoscope --version
 
       - name: Set up Git
         run: |
