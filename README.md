@@ -8,6 +8,11 @@ It runs actions on Push or on Mondays at 00:00 and creates a release.
 
 In this case, it collects python modules and .wheels needed.
 
+## First time?
+
+Run the handy setup script to setup the venv and regen the lock file:
+`./setup.sh`
+
 ## Remember:
 
 Update lockfile to keep pins/reproducible:
