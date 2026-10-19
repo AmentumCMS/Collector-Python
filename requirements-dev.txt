@@ -1,0 +1,10 @@
+-r requirements.txt
+
+diffoscope
+pytest
+pytest-cov
+black
+isort
+flake8
+mypy
+yamllint
