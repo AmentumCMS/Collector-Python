@@ -4,6 +4,7 @@
 # Ignore subdirectories
 !.github/**
 dist/
+*venv/
 pypi/
 coverage/
 docs/
