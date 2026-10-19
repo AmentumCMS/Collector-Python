@@ -114,6 +114,7 @@ jobs:
           python -m pip install \
             --upgrade \
             pip \
+            pip-tools \
             setuptools \
             wheel
           python -m pip install \
@@ -351,6 +352,7 @@ jobs:
           python -m pip install \
             --upgrade \
             pip \
+            pip-tools \
             setuptools \
             wheel
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
