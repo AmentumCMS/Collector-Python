@@ -334,7 +334,7 @@ jobs:
             if [ -f trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt ]; then
               echo "### Top Trivy Findings"
               echo '```'
-              head -n 100 trivy-report.txt
+              head -n 100 trivy-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
               echo '```'
             else
               echo "trivy-report.txt not found."
