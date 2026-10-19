@@ -1,0 +1,664 @@
+name: Python Collector - Main
+run-name: ${{ github.actor }} is Collecting PyPi-ness🚀
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PIP_NO_PYTHON_VERSION_WARNING: "1"
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  SOURCE_DATE_EPOCH: "0"
+  TZ: UTC
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+
+jobs:
+  Setup:
+    runs-on: ubuntu-latest
+    outputs:
+      Date: ${{ steps.date.outputs.date }}
+      v311: ${{ steps.v.outputs.v311 }}
+      v312: ${{ steps.v.outputs.v312 }}
+      v313: ${{ steps.v.outputs.v313 }}
+    steps:
+      - name: Get current date
+        id: Date
+        run: |
+          echo -n "Getting Date: "
+          echo "DATE=$(date '+%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+          echo -e "$DATE\nFile:\n$GITHUB_OUTPUT"
+          echo -e "\nValues:"
+          cat $GITHUB_OUTPUT
+
+      - name: Get current Python versions
+        id: v
+        run: |
+          echo -e "Getting versions"
+
+          python_versions=$(curl -s https://www.python.org/ftp/python/)
+
+          get_version() {
+            minor_version=$1
+
+            echo "$python_versions" \
+              | grep -oE "${minor_version}\.[0-9]+/" \
+              | tr -d '/' \
+              | sort -V \
+              | tail -1
+          }
+
+          v311=$(get_version 3.11)
+          v312=$(get_version 3.12)
+          v313=$(get_version 3.13)
+
+          echo "The latest Python 3.11 version is: $v311"
+          echo "The latest Python 3.12 version is: $v312"
+          echo "The latest Python 3.13 version is: $v313"
+
+          echo "v311=${v311}" >> $GITHUB_OUTPUT
+          echo "v312=${v312}" >> $GITHUB_OUTPUT
+          echo "v313=${v313}" >> $GITHUB_OUTPUT
+
+          echo -e "\nFile:\n$GITHUB_OUTPUT"
+          echo "Values:"
+          cat $GITHUB_OUTPUT
+
+  Collect:
+    runs-on: ubuntu-latest
+    needs: [ Setup ]
+
+    permissions:
+      contents: write
+      pull-requests: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - ${{ needs.Setup.outputs.v311 }}
+          - ${{ needs.Setup.outputs.v312 }}
+          - ${{ needs.Setup.outputs.v313 }}
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+          lfs: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-toolchain.txt
+
+      - name: Create isolated build environment
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install the locked development toolchain
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            --require-hashes \
+            --requirement requirements-toolchain.txt
+          python -m pip install \
+            --no-deps \
+            --editable .
+
+      - name: Record tool versions
+        run: |
+          set -euo pipefail
+          python --version
+          python -m pip --version
+          python -m piptools --version
+          ruff --version
+          mypy --version
+          pytest --version
+
+      - name: Set up Git
+        run: |
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
+
+      - name: Collect pypi artifacts
+        run: |
+          mkdir -p pypi
+          corepack pack -o pypi/pypi-pack.tar.gz
+          pip download \
+            --dest pypi \
+            --requirement requirements-toolchain.txt
+
+      - name: TARchive pypi directory
+        run: |
+          tar -cvI pigz -f ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz \
+            pypi requirements*.txt \
+            | tee ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz.txt
+
+      - name: TARchive pypi-cache storage directory SHA HASH
+        run: |
+          sha256sum -b ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz | tee \
+            ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz.sha
+
+      - name: Artifact Listings
+        run: |
+          echo -e "\nListing files\n$(ls -1Ssh)"
+          echo -e "\nListing Consumption:\n$(du -chd0)"
+
+      - name: Upload pypi-cache artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz
+          path: ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz*
+          if-no-files-found: error
+
+  SecurityScan:
+    runs-on: ubuntu-latest
+    needs: [ Setup, Collect ]
+
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - ${{ needs.Setup.outputs.v311 }}
+          - ${{ needs.Setup.outputs.v312 }}
+          - ${{ needs.Setup.outputs.v313 }}
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+          lfs: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-toolchain.txt
+
+      - name: Create isolated build environment
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install the locked development toolchain
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            --require-hashes \
+            --requirement requirements-toolchain.txt
+          python -m pip install \
+            --no-deps \
+            --editable .
+
+      - name: Restore pip cache artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz
+
+      - name: Extract pip cache
+        run: |
+          tar -xzvf ${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date }}.tgz
+
+      - name: Security - Generate app SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: app-sbom.cdx.json
+          upload-artifact: false
+
+      - name: Security - Scan SBOM with Grype
+        uses: anchore/scan-action@v7
+        with:
+          sbom: app-sbom.cdx.json
+          severity-cutoff: high
+          fail-build: false
+          output-format: table
+          output-file: grype-report.txt
+
+      - name: Security - Scan SBOM with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: sbom
+          scan-ref: app-sbom.cdx.json
+          scanners: vuln
+          severity: CRITICAL,HIGH,MEDIUM,LOW
+          ignore-unfixed: true
+          format: table
+          output: trivy-report.txt
+          exit-code: 0
+
+      - name: Security - Write summary
+        if: always()
+        run: |
+          {
+            echo "# Security Scan Summary"
+            echo ""
+
+            echo "## Grype SBOM Scan"
+            echo ""
+
+            if [ -f grype-report.txt ]; then
+              echo "### Severity Counts"
+              awk '
+              {
+                sev=tolower($6)
+                if (sev=="critical"||sev=="high"||sev=="medium"||sev=="low") {
+                  counts[sev]++
+                }
+              }
+              END {
+                print "- Critical:", counts["critical"]+0
+                print "- High:", counts["high"]+0
+                print "- Medium:", counts["medium"]+0
+                print "- Low:", counts["low"]+0
+              }
+              ' grype-report.txt
+
+              echo ""
+              echo "### Top Grype Findings"
+              echo '```'
+              awk 'NR>1 && ($6=="Critical"||$6=="High"||$6=="Medium"||$6=="Low")' grype-report.txt | head -n 50
+              echo '```'
+            else
+              echo "grype-report.txt not found."
+            fi
+
+            echo ""
+            echo "## Trivy Filesystem Scan"
+            echo ""
+            if [ -f trivy-report.txt ]; then
+              echo "### Top Trivy Findings"
+              echo '```'
+              head -n 100 trivy-report.txt
+              echo '```'
+            else
+              echo "trivy-report.txt not found."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Security - Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ vars.COLLECTOR }}-security-scans-${{ needs.Setup.outputs.Date }}
+          path: |
+            app-sbom.cdx.json
+            grype-report.txt
+            trivy-report.txt
+          if-no-files-found: warn
+
+  MakeISO:
+    runs-on: ubuntu-latest
+    needs: [ Setup, Collect, SecurityScan ]
+    env:
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+          lfs: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements-toolchain.txt
+
+      - name: Create isolated build environment
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install the locked development toolchain
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            --require-hashes \
+            --requirement requirements-toolchain.txt
+          python -m pip install \
+            --no-deps \
+            --editable .
+
+      - name: Install mkisofs
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y mkisofs isomd5sum wget tree
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: ISO
+
+      - name: Download Node Installers
+        run: |
+          echo -e "\nDownloading Python runtimes"
+
+          mkdir -p ISO/runtimes
+          cd ISO/runtimes
+
+          for VERSION in \
+              3.11.13 \
+              3.12.11 \
+              3.13.7
+          do
+              echo -e "\nDownloading Python ${VERSION}"
+
+              BASE_URL="https://www.python.org/ftp/python/${VERSION}"
+
+              FILES=(
+                  "python-${VERSION}-amd64.exe"
+                  "python-${VERSION}-embed-amd64.zip"
+                  "Python-${VERSION}.tgz"
+              )
+
+              for FILE in "${FILES[@]}"
+              do
+                  curl -sSLw "Downloaded ${FILE} (%{http_code}: %{size_download}B)\n" \
+                      "${BASE_URL}/${FILE}" \
+                      -o "${FILE}"
+              done
+          done
+
+          echo -e "\nListing downloaded files:\n$(ls -1Ssh)"
+
+          echo -e "\nHashing Files:"
+          sha256sum -b * | tee python_runtimes.sha
+
+      - name: Copy Markdowns to ISO
+        run: cp -v *.md ISO/
+
+      - name: Copy package manifests to ISO
+        run: |
+          mkdir -p ISO/app
+          cp -v requirements*.txt ISO/
+
+      - name: Package source repository into ISO
+        run: |
+          echo -e "\nPackaging source repository"
+
+          mkdir -p ISO/source
+
+          # Create a clean source snapshot from the checked-out commit.
+          # This excludes the .git directory and generated ISO staging/output files.
+          tar \
+            --exclude='.git' \
+            --exclude='ISO' \
+            --exclude='node_modules' \
+            --exclude='verdaccio' \
+            --exclude='*.tgz' \
+            --exclude='*.iso' \
+            --exclude='*.sha' \
+            --exclude='*.txt' \
+            -czvf ISO/source/${{ vars.COLLECTOR }}-source-${{ needs.Setup.outputs.Date }}.tgz \
+            .
+
+          cd ISO/source
+          sha256sum -b ${{ vars.COLLECTOR }}-source-${{ needs.Setup.outputs.Date }}.tgz \
+            | tee ${{ vars.COLLECTOR }}-source-${{ needs.Setup.outputs.Date }}.tgz.sha
+
+          echo -e "\nSource package:"
+          ls -1Ssh
+
+      - name: Show Artifacts
+        run: |
+          echo -e "Directory Listing:\n$(ls -1Ssh ISO)"
+          echo -e "\nDirectory Size:\n$(du -chd0 ISO)"
+          echo -e "\nFile structure:\n$(tree -L 3 ISO|tee ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.txt)"
+
+      - name: Generate Comprehensive Artifacts Hash File
+        run: |
+          cd ISO
+          sha256sum -b * vscode/* runtimes/* | tee \
+            ../${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.sha
+          cd -
+          cp -v ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.??? ISO/
+
+      - name: Make ISO
+        run: |
+          mkisofs -J -R -v -T -l \
+            -V '${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}' \
+            -A '${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}' \
+            -o ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso \
+            ISO
+
+      - name: Implant MD5 sum into iso
+        run: implantisomd5 ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso
+
+      - name: Generate ISO Hash
+        run: |
+          sha256sum -b ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso | tee \
+            ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso.sha
+
+      - name: Show ISO & Hash
+        run: ls -1Ssh *.iso*
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso
+          path: ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso*
+          if-no-files-found: error
+
+      - name: Upload ISO SHA
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso.sha
+          path: ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso.sha
+          if-no-files-found: error
+
+  VirusScan:
+    runs-on: ubuntu-latest
+    needs: [ Setup, MakeISO ]
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso
+
+      - name: Download TGZ artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          pattern: "*-${{ needs.Setup.outputs.Date }}.tgz"
+
+      - name: List files to scan
+        run: |
+          echo "Files to be scanned:"
+          ls -1Ssh
+
+      - name: Scan files for viruses
+        id: virus_scan
+        uses: hugoalh/scan-virus-ghaction/clamav@v0.20.1
+        with:
+          clamav_update: true
+          found_log: true
+          found_summary: true
+          statistics_log: true
+          statistics_summary: true
+
+      - name: Save scan summary
+        if: always()
+        run: |
+          echo "Virus scan completed" > ${{ vars.COLLECTOR }}-virus-scan-report-${{ needs.Setup.outputs.Date }}.txt
+          echo "Scan finished: ${{ steps.virus_scan.outputs.finish }}" >> ${{ vars.COLLECTOR }}-virus-scan-report-${{ needs.Setup.outputs.Date }}.txt
+          echo "Viruses found: ${{ steps.virus_scan.outputs.found }}" >> ${{ vars.COLLECTOR }}-virus-scan-report-${{ needs.Setup.outputs.Date }}.txt
+          echo "" >> ${{ vars.COLLECTOR }}-virus-scan-report-${{ needs.Setup.outputs.Date }}.txt
+          echo "For detailed scan results, check the job logs and step summary." >> ${{ vars.COLLECTOR }}-virus-scan-report-${{ needs.Setup.outputs.Date }}.txt
+
+          echo -e "\nGenerated Virus Scan Report:\n$(cat ${{ vars.COLLECTOR }}-virus-scan-report-${{ needs.Setup.outputs.Date }}.txt)"
+
+          echo -e "\nScan Statistics:\n$(cat $GITHUB_STEP_SUMMARY)" \
+          | tee ${{ vars.COLLECTOR }}-virus-scan-statistics-${{ needs.Setup.outputs.Date }}.txt
+
+      - name: Upload virus scan report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ vars.COLLECTOR }}-virus-scan-${{ needs.Setup.outputs.Date }}.txt
+          path: "*virus*.txt"
+          if-no-files-found: warn
+
+  # OfflineTest:
+  #   runs-on: ubuntu-latest
+  #   needs: [ Setup, MakeISO ]
+  #   permissions:
+  #     contents: write
+  #     pull-requests: read
+  #   strategy:
+  #     matrix:
+  #       node-version: [ 18.x, 20.x, 22.x, 24.x ]
+  #   steps:
+  #     - name: Install isomd5sum
+  #       run: |
+  #         sudo apt-get update -y
+  #         sudo apt-get install -y isomd5sum
+
+  #     - name: Check out repository code
+  #       uses: actions/checkout@v7
+
+  #     - name: Download ISO and hash
+  #       uses: actions/download-artifact@v8
+  #       with:
+  #         pattern: "${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso*"
+  #         merge-multiple: true
+
+  #     - name: Validate ISO Hashes
+  #       run: |
+  #         echo -e "List Artifacts"
+  #         ls -Alht
+  #         echo -e "\nCheck injected ISO MD5"
+  #         checkisomd5 ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso
+  #         echo -e "\nCheck ISO sha256"
+  #         sha256sum -cw ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.iso.sha
+
+  #     - name: Mount ISO
+  #       run: sudo mount -v -o loop ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date
+  #         }}.iso /mnt
+
+  #     - name: UnTARchive Yarn Cache
+  #       run: tar -xzvf /mnt/${{ vars.COLLECTOR }}-pypi-${{ needs.Setup.outputs.Date
+  #         }}.tgz
+
+  #     - name: Run pypi install
+  #       run: |
+  #         echo -e "Setup Yarn"
+  #         sudo corepack enable
+  #         echo -e "Configure Yarn for inaccessable network"
+  #         npm set registry http://localhost:4873/
+  #         pypi config set npmRegistryServer http://localhost:4873/
+  #         echo -e "\nRun pypi install\n"
+  #         pypi install --immutable  --immutable-cache
+  #         corepack pack -o pypi/pypi-pack.tar.gz
+
+  #     - name: Run pypi
+  #       run: |
+  #         echo -e "Run Yarn"
+  #         pypi run
+
+  Release:
+    runs-on: ubuntu-latest
+    needs: [ Setup, VirusScan, SecurityScan ]
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+
+      - name: Show Artifacts
+        run: |
+          echo -e "Directory Listing:\n$(ls -1Ssh ${{ vars.COLLECTOR }}-*.*)"
+          echo -e "\nDirectory Size:\n$(du -chd0 ${{ vars.COLLECTOR }}-*.*)"
+          echo -e "\nISO and TGZ files:"
+          ls -1Ssh *tgz* *iso* || echo "No ISO/TGZ files found"
+          echo ""
+          echo "Virus scan report:"
+          ls -1Ssh *virus-scan-report* || echo "No virus scan report found"
+
+  Sharepoint:
+    runs-on: ubuntu-latest
+    needs: [ Setup, VirusScan, SecurityScan ]
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+
+      - name: Show Artifacts
+        run: |
+          echo -e "Directory Listing:\n$(ls -1Ssh ${{ vars.COLLECTOR }}-*.*)"
+          echo -e "\nDirectory Size:\n$(du -chd0 ${{ vars.COLLECTOR }}-*.*)"
+          echo -e "\nISO and TGZ files:"
+          ls -1Ssh *tgz* *iso* || echo "No ISO/TGZ files found"
+          echo ""
+          echo "Virus scan report:"
+          ls -1Ssh *virus-scan-report* || echo "No virus scan report found"
+
+      - name: Create tag
+        uses: rickstaa/action-create-tag@v1
+        id: tag_create
+        with:
+          tag: ${{ needs.Setup.outputs.Date }}
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          tag_exists_error: false
+          message: "Release for ${{ needs.Setup.outputs.Date }} run"
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ vars.COLLECTOR }} ${{ needs.Setup.outputs.Date }}
+          tag_name: ${{ needs.Setup.outputs.Date }}
+          make_latest: true
+          files: ${{ vars.COLLECTOR }}-*.*
