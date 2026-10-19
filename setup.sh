@@ -7,10 +7,10 @@ if [[ -d .venv ]]; then
   echo "Activated existing .venv."
 else
   echo "Creating new .venv."
-  python3 -m venv .venv
+  python -m venv .venv
   source .venv/bin/activate
   echo "Activated new .venv."
-  python3 -m pip install \
+  python -m pip install \
     --upgrade \
     pip \
     pip-tools \
