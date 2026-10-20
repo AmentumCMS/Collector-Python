@@ -11,7 +11,13 @@ In this case, it collects python modules and .wheels needed.
 ## First time?
 
 Run the handy setup script to setup the venv and regen the lock file:
-`./setup.sh`
+`./setup.sh` on the low side
+
+Use `collect.sh <dir>` on the low side to collect the requirements for one runtime
+
+Use `kickstart.sh` on the highside to setup the venv to enable uploading
+
+Use `upload.sh` on the highside to setup the venv to enable uploading
 
 ## Remember:
 

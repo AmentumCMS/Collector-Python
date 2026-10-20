@@ -461,24 +461,24 @@ jobs:
       - name: Copy Markdowns to ISO
         run: cp -v *.md ISO/
 
+      - name: Move evidence to ISO/evidence
+        run: |
+          mkdir -p ISO/evidence
+          mv -v ISO/[*report*|*sbom*] ISO/evidence/
+  
       - name: Copy package manifests to ISO
         run: |
-          mkdir -p ISO/app
           cp -v requirements*.txt ISO/
 
       - name: Package source repository into ISO
         run: |
           echo -e "\nPackaging source repository"
-
           mkdir -p ISO/source
 
           # Create a clean source snapshot from the checked-out commit.
           # This excludes the .git directory and generated ISO staging/output files.
           tar \
-            --exclude='.git' \
             --exclude='ISO' \
-            --exclude='node_modules' \
-            --exclude='verdaccio' \
             --exclude='*.tgz' \
             --exclude='*.iso' \
             --exclude='*.sha' \
@@ -502,8 +502,7 @@ jobs:
       - name: Generate Comprehensive Artifacts Hash File
         run: |
           cd ISO
-          sha256sum -b * vscode/* runtimes/* | tee \
-            ../${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.sha
+          find . -type f -exec sha256sum -b {} \; | tee ../${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.sha
           cd -
           cp -v ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.??? ISO/
 
