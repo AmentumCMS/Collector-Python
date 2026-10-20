@@ -5,14 +5,23 @@ set -euo pipefail
 : "${NEXUS_USER:?}"
 : "${NEXUS_PASSWORD:?}"
 
+CA_BUNDLE="${CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
+
 command -v twine >/dev/null || {
     echo "ERROR: twine not found"
+    echo "Run kickstart.sh to set up the environment"
     exit 1
 }
 
 REPORT="upload.log"
 
 : > "${REPORT}"
+
+[[ -r "${CA_BUNDLE}" ]] || {
+  echo "ERROR: CA bundle is not readable: ${CA_BUNDLE}" >&2
+  exit 1
+}
+export TWINE_CA_BUNDLE="${CA_BUNDLE}"
 
 echo -en "\nFinding files to upload: "
 find pypi \
@@ -29,7 +38,6 @@ do
         --repository-url "${NEXUS_URL}" \
         --username "${NEXUS_USER}" \
         --password "${NEXUS_PASSWORD}" \
-        --skip-existing \
         "${FILE}" \
         >> "${REPORT}" 2>&1
     then
