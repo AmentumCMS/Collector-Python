@@ -28,6 +28,8 @@ security-only Python releases may not include Windows binaries.
 
 Branch validation tests each distinct major.minor Python series from both lists,
 so adding or removing a configured series automatically updates the test matrix.
+It checks shell script syntax and runs the runtime updater's standard-library
+unit tests without installing the third-party packages being collected.
 
 Edit these lists to pin releases or add/remove Python major.minor series.
 To refresh them, run **Update Python runtime versions** from the Actions tab,
