@@ -30,7 +30,7 @@ defaults:
     shell: bash
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_RUNTIME_CONFIG: python-runtimes.json
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
   PYTHONUNBUFFERED: "1"
@@ -41,17 +41,45 @@ env:
   LC_ALL: C.UTF-8
 
 jobs:
+  runtime-matrix:
+    name: Read configured Python versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python-versions: ${{ steps.versions.outputs.python-versions }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read Python series from runtime configuration
+        id: versions
+        run: |
+          set -euo pipefail
+          jq -e '
+            [.source_versions, .windows_versions] | all(.[];
+              type == "array" and length > 0 and all(.[];
+                type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")
+              )
+            )
+          ' "$PYTHON_RUNTIME_CONFIG" > /dev/null
+          versions=$(jq -c '
+            [.source_versions[], .windows_versions[]]
+            | map(split(".")[:2] | join(".")) | unique
+          ' "$PYTHON_RUNTIME_CONFIG")
+          echo "python-versions=$versions" >> "$GITHUB_OUTPUT"
+
   validate:
     name: Validate on Python ${{ matrix.python-version }}
+    needs: runtime-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.11"
-          - "3.12"
+        python-version: ${{ fromJSON(needs.runtime-matrix.outputs.python-versions) }}
 
     steps:
       - name: Check out repository code

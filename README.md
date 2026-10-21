@@ -26,6 +26,9 @@ list selects the Python source archives; `windows_versions` independently select
 the Windows x64 installers and embeddable ZIPs. These versions can differ because
 security-only Python releases may not include Windows binaries.
 
+Branch validation tests each distinct major.minor Python series from both lists,
+so adding or removing a configured series automatically updates the test matrix.
+
 Edit these lists to pin releases or add/remove Python major.minor series.
 To refresh them, run **Update Python runtime versions** from the Actions tab,
 selecting the branch to update. The workflow finds the latest stable release in
