@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 env:
+  PYTHON_RUNTIME_CONFIG: python-runtimes.json
   PYTHON_VERSION: "3.11"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
@@ -423,40 +424,88 @@ jobs:
           merge-multiple: true
           path: ISO
 
-      - name: Download Node Installers
+      - name: Download Python runtimes
+        shell: bash
         run: |
+          set -euo pipefail
+
           echo -e "\nDownloading Python runtimes"
+
+          jq -e '
+            [.source_versions, .windows_versions] | all(.[];
+              type == "array" and length > 0 and all(.[];
+                type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")
+              )
+            )
+          ' "$PYTHON_RUNTIME_CONFIG" > /dev/null
+          mapfile -t SOURCE_VERSIONS < <(jq -r '.source_versions[]' "$PYTHON_RUNTIME_CONFIG")
+          mapfile -t WINDOWS_VERSIONS < <(jq -r '.windows_versions[]' "$PYTHON_RUNTIME_CONFIG")
 
           mkdir -p ISO/runtimes
           cd ISO/runtimes
 
-          for VERSION in \
-              3.11.13 \
-              3.12.11 \
-              3.13.7
-          do
-              echo -e "\nDownloading Python ${VERSION}"
+          download_file() {
+            local url="$1"
+            local file="$2"
+            local temporary="${file}.part"
 
-              BASE_URL="https://www.python.org/ftp/python/${VERSION}"
+            rm -f "${temporary}"
 
-              FILES=(
-                  "python-${VERSION}-amd64.exe"
-                  "python-${VERSION}-embed-amd64.zip"
-                  "Python-${VERSION}.tgz"
-              )
+            echo "Downloading ${file}"
 
-              for FILE in "${FILES[@]}"
-              do
-                  curl -sSLw "Downloaded ${FILE} (%{http_code}: %{size_download}B)\n" \
-                      "${BASE_URL}/${FILE}" \
-                      -o "${FILE}"
-              done
+            curl \
+              --fail-with-body \
+              --silent \
+              --show-error \
+              --location \
+              --retry 3 \
+              --output "${temporary}" \
+              --write-out \
+              "Downloaded ${file} (%{http_code}: %{size_download}B)\n" \
+              "${url}"
+
+            mv "${temporary}" "${file}"
+          }
+
+          echo -e "\nDownloading source releases"
+
+          for VERSION in "${SOURCE_VERSIONS[@]}"; do
+            BASE_URL="https://www.python.org/ftp/python/${VERSION}"
+            FILE="Python-${VERSION}.tgz"
+
+            download_file "${BASE_URL}/${FILE}" "${FILE}"
           done
 
-          echo -e "\nListing downloaded files:\n$(ls -1Ssh)"
+          echo -e "\nDownloading Windows binaries"
 
-          echo -e "\nHashing Files:"
-          sha256sum -b * | tee python_runtimes.sha
+          for VERSION in "${WINDOWS_VERSIONS[@]}"; do
+            BASE_URL="https://www.python.org/ftp/python/${VERSION}"
+
+            for FILE in \
+              "python-${VERSION}-amd64.exe" \
+              "python-${VERSION}-embed-amd64.zip"
+            do
+              download_file "${BASE_URL}/${FILE}" "${FILE}"
+            done
+          done
+
+          echo -e "\nListing downloaded files:"
+          ls -1Ssh
+
+          echo -e "\nChecking for unexpectedly small files"
+
+          if find . -maxdepth 1 -type f -size -1k -print | grep -q .; then
+            echo "ERROR: Unexpectedly small runtime files were found:" >&2
+            find . -maxdepth 1 -type f -size -1k -print >&2
+            exit 1
+          fi
+
+          echo -e "\nHashing files:"
+          find . -maxdepth 1 -type f ! -name 'python_runtimes.sha' \
+            -printf '%f\n' \
+            | sort \
+            | xargs sha256sum -b \
+            | tee python_runtimes.sha
 
       - name: Copy Markdowns to ISO
         run: cp -v *.md ISO/
@@ -466,7 +515,7 @@ jobs:
           mkdir -p ISO/evidence
           mv -v ISO/*report* ISO/evidence/
           mv -v ISO/*sbom* ISO/evidence/
-  
+
       - name: Copy package manifests to ISO
         run: |
           cp -v requirements*.txt ISO/
@@ -494,18 +543,18 @@ jobs:
           echo -e "\nSource package:"
           ls -1Ssh
 
-      - name: Show Artifacts
-        run: |
-          echo -e "Directory Listing:\n$(ls -1Ssh ISO)"
-          echo -e "\nDirectory Size:\n$(du -chd0 ISO)"
-          echo -e "\nFile structure:\n$(tree -L 3 ISO|tee ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.txt)"
-
       - name: Generate Comprehensive Artifacts Hash File
         run: |
           cd ISO
           find . -type f -exec sha256sum -b {} \; | tee ../${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.sha
           cd -
           cp -v ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.??? ISO/
+
+      - name: Show Artifacts
+        run: |
+          echo -e "Directory Listing:\n$(ls -1Ssh ISO)"
+          echo -e "\nDirectory Size:\n$(du -chd0 ISO)"
+          echo -e "\nFile structure:\n$(tree -L 3 ISO|tee ${{ vars.COLLECTOR }}-${{ needs.Setup.outputs.Date }}.txt)"
 
       - name: Make ISO
         run: |
