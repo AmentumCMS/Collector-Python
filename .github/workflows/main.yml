@@ -49,18 +49,32 @@ jobs:
       - name: Get current Python versions
         id: v
         run: |
+          set -euo pipefail
           echo -e "Getting versions"
 
-          python_versions=$(curl -s https://www.python.org/ftp/python/)
+          python_versions=$(curl --fail --silent --show-error \
+            https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json)
+          os_version=$(. /etc/os-release; echo "$VERSION_ID")
 
           get_version() {
-            minor_version=$1
-
-            echo "$python_versions" \
-              | grep -oE "${minor_version}\.[0-9]+/" \
-              | tr -d '/' \
+            local version
+            version=$(echo "$python_versions" \
+              | jq -r --arg series "$1" --arg os_version "$os_version" '
+                  .[] | select(.stable == true)
+                  | select(.version | startswith($series + "."))
+                  | select(any(.files[];
+                      .platform == "linux" and .platform_version == $os_version
+                      and .arch == "x64"))
+                  | .version
+                ' \
               | sort -V \
-              | tail -1
+              | tail -1) || return 1
+
+            if [[ -z "$version" ]]; then
+              echo "No stable Python $1 x64 build available for Ubuntu $os_version" >&2
+              return 1
+            fi
+            echo "$version"
           }
 
           v309=$(get_version 3.9)

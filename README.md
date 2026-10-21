@@ -21,6 +21,10 @@ Use `upload.sh` on the highside to setup the venv to enable uploading
 
 ## Python runtime versions
 
+Collection jobs select the latest stable x64 Python build for the runner's Ubuntu
+version from the `actions/python-versions` manifest used by `setup-python`, rather
+than assuming every python.org release has an available Actions build.
+
 Both collection workflows read `python-runtimes.json`. Its `source_versions`
 list selects the Python source archives; `windows_versions` independently selects
 the Windows x64 installers and embeddable ZIPs. These versions can differ because
@@ -28,6 +32,8 @@ security-only Python releases may not include Windows binaries.
 
 Branch validation tests each distinct major.minor Python series from both lists,
 so adding or removing a configured series automatically updates the test matrix.
+It checks shell script syntax and runs the runtime updater's standard-library
+unit tests without installing the third-party packages being collected.
 
 Edit these lists to pin releases or add/remove Python major.minor series.
 To refresh them, run **Update Python runtime versions** from the Actions tab,
