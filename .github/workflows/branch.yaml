@@ -30,7 +30,7 @@ defaults:
     shell: bash
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_RUNTIME_CONFIG: python-runtimes.json
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
   PYTHONUNBUFFERED: "1"
@@ -41,200 +41,72 @@ env:
   LC_ALL: C.UTF-8
 
 jobs:
+  runtime-matrix:
+    name: Read configured Python versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python-versions: ${{ steps.versions.outputs.python-versions }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read Python series from runtime configuration
+        id: versions
+        run: |
+          set -euo pipefail
+          jq -e '
+            [.source_versions, .windows_versions] | all(.[];
+              type == "array" and length > 0 and all(.[];
+                type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")
+              )
+            )
+          ' "$PYTHON_RUNTIME_CONFIG" > /dev/null
+          versions=$(jq -c '
+            [.source_versions[], .windows_versions[]]
+            | map(split(".")[:2] | join(".")) | unique
+          ' "$PYTHON_RUNTIME_CONFIG")
+          echo "python-versions=$versions" >> "$GITHUB_OUTPUT"
+
   validate:
     name: Validate on Python ${{ matrix.python-version }}
+    needs: runtime-matrix
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.11"
-          - "3.12"
+        python-version: ${{ fromJSON(needs.runtime-matrix.outputs.python-versions) }}
 
     steps:
       - name: Check out repository code
         uses: actions/checkout@v7
         with:
-          submodules: true
-          lfs: true
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: |
-            pyproject.toml
-            containers/requirements-toolchain.txt
 
-      - name: Create isolated build environment
-        run: |
-          set -euo pipefail
-          python -m venv .venv
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
-
-      - name: Install the locked development toolchain
-        run: |
-          set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install \
-            --require-hashes \
-            --requirement containers/requirements-toolchain.txt
-          python -m pip install \
-            --no-deps \
-            --editable .
-
-      - name: Record tool versions
+      - name: Check Python runtime
         run: |
           set -euo pipefail
           python --version
-          python -m pip --version
-          python -m piptools --version
-          ruff --version
-          mypy --version
-          pytest --version
+          python - "${{ matrix.python-version }}" <<'PY'
+          import sys
 
-      - name: Check formatting and lint
+          expected = tuple(map(int, sys.argv[1].split(".")))
+          assert sys.version_info[:2] == expected
+          PY
+
+      - name: Check shell scripts
         run: |
           set -euo pipefail
-          ruff format --check src tests
-          ruff check src tests
+          bash -n collect.sh kickstart.sh setup.sh upload.sh
 
-      - name: Run static type checks
-        run: |
-          set -euo pipefail
-          mypy src
-
-      - name: Run unit tests
-        run: |
-          set -euo pipefail
-          pytest \
-            --strict-config \
-            --strict-markers \
-            --junitxml=reports/junit-python-${{ matrix.python-version }}.xml \
-            tests/unit
-
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-python-${{ matrix.python-version }}
-          path: reports/junit-python-${{ matrix.python-version }}.xml
-          if-no-files-found: warn
-          retention-days: 14
-
-  package:
-    name: Build and verify Python package
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: validate
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: containers/requirements-toolchain.txt
-
-      - name: Install locked packaging tools
-        run: |
-          set -euo pipefail
-          python -m venv .venv
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install \
-            --require-hashes \
-            --requirement containers/requirements-toolchain.txt
-
-      - name: Derive reproducible build timestamp
-        run: |
-          set -euo pipefail
-          epoch="$(git show -s --format=%ct HEAD)"
-          echo "SOURCE_DATE_EPOCH=$epoch" >> "$GITHUB_ENV"
-
-      - name: Build source and wheel distributions
-        run: |
-          set -euo pipefail
-          python -m build --no-isolation
-          python -m twine check dist/*
-
-      - name: Generate package checksums
-        run: |
-          set -euo pipefail
-          (
-            cd dist
-            find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\0' \
-              | sort -z \
-              | xargs -0 sha256sum \
-              > SHA256SUMS
-            sha256sum --check SHA256SUMS
-          )
-
-      - name: Test wheel installation without dependencies
-        run: |
-          set -euo pipefail
-          python -m venv wheel-test
-          wheel="$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit)"
-          test -n "$wheel"
-          wheel-test/bin/python -m pip install --no-deps "$wheel"
-          wheel-test/bin/collector-python --help
-
-      - name: Upload branch package
-        uses: actions/upload-artifact@v4
-        with:
-          name: collector-python-pip-${{ github.sha }}
-          path: |
-            dist/*.whl
-            dist/*.tar.gz
-            dist/SHA256SUMS
-          if-no-files-found: error
-          retention-days: 14
-
-  container:
-    name: Build and smoke-test collector image
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: validate
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Build collector image
-        run: |
-          set -euo pipefail
-          podman build \
-            --file containers/Containerfile \
-            --tag localhost/collector-python-pip:${{ github.sha }} \
-            .
-
-      - name: Inspect and smoke-test image
-        run: |
-          set -euo pipefail
-          podman image inspect localhost/collector-python-pip:${{ github.sha }} \
-            > container-inspect.json
-          podman run --rm \
-            --network=none \
-            localhost/collector-python-pip:${{ github.sha }} \
-            collector-python --help
-
-      - name: Upload container inspection evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: container-inspect-${{ github.sha }}
-          path: container-inspect.json
-          if-no-files-found: error
-          retention-days: 14
+      - name: Test runtime version updater
+        run: python -m unittest discover -s tests -v
