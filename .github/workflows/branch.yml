@@ -68,7 +68,7 @@ jobs:
                   | .version
                 ' \
               | sort -V \
-              | tail -1)
+              | tail -1) || return 1
 
             if [[ -z "$version" ]]; then
               echo "No stable Python $1 x64 build available for Ubuntu $os_version" >&2

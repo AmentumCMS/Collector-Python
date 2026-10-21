@@ -95,7 +95,12 @@ curl() {
 
     def test_invalid_manifest_and_download_failure_fail_without_outputs(self):
         for workflow in WORKFLOWS:
-            for manifest, curl_status in (("not json", 0), ("[]", 0), ("[]", 22)):
+            for manifest, curl_status in (
+                ("not json", 0),
+                ("[]", 0),
+                ("[]", 22),
+                (json.dumps(self.manifest + ["malformed entry"]), 0),
+            ):
                 with self.subTest(workflow=workflow, manifest=manifest, status=curl_status):
                     result, output = self.discover(workflow, manifest, curl_status)
                     self.assertNotEqual(result.returncode, 0)
