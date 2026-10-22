@@ -522,15 +522,18 @@ jobs:
       - name: Copy Markdowns to ISO
         run: cp -v *.md ISO/
 
+      - name: Copy scripts to ISO
+        run: cp -v *.sh ISO/
+
+      - name: Copy package manifests to ISO
+        run: |
+          cp -v requirements*.txt ISO/
+
       - name: Move evidence to ISO/evidence
         run: |
           mkdir -p ISO/evidence
           mv -v ISO/*report* ISO/evidence/
           mv -v ISO/*sbom* ISO/evidence/
-
-      - name: Copy package manifests to ISO
-        run: |
-          cp -v requirements*.txt ISO/
 
       - name: Package source repository into ISO
         run: |
