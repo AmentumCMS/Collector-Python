@@ -43,7 +43,7 @@ do
     if twine upload \
     --repository-url "${NEXUS_URL}" \
     --username "${NEXUS_USER}" \
-    --password "${NEXUS_PASSWORD}" \
+    --password "${NEXUS_PASS}" \
     "${FILE}" \
     >> "${REPORT}" 2>&1
     then
