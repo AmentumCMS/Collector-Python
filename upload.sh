@@ -5,7 +5,12 @@ set -euo pipefail
 : "${NEXUS_USER:?}"
 : "${NEXUS_PASSWORD:?}"
 
-CA_BUNDLE="${CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
+if [[ ${CA_BUNDLE+x} ]]; then
+    echo "CA_BUNDLE is set: ${CA_BUNDLE}"
+else
+    CA_BUNDLE="${CA_BUNDLE:-/etc/ssl/cert.pem}"
+    echo "Using CA_BUNDLE: ${CA_BUNDLE}"
+fi
 
 command -v twine >/dev/null || {
     echo "ERROR: twine not found"
@@ -18,16 +23,17 @@ REPORT="upload.log"
 : > "${REPORT}"
 
 [[ -r "${CA_BUNDLE}" ]] || {
-  echo "ERROR: CA bundle is not readable: ${CA_BUNDLE}" >&2
-  exit 1
+    echo "ERROR: CA bundle is not readable: ${CA_BUNDLE}" >&2
+    exit 1
 }
-export TWINE_CA_BUNDLE="${CA_BUNDLE}"
+export TWINE_CERT="${CA_BUNDLE}"
+export REQUESTS_CA_BUNDLE="${CA_BUNDLE}"
 
 echo -en "\nFinding files to upload: "
-find pypi \
-  -type f \
-  \( -name "*.whl" -o -name "*.tar.gz" -o -name "*.zip" \) \
-  | sort > upload.lst
+find pypi-* \
+-type f \
+\( -name "*.whl" -o -name "*.tar.gz" -o -name "*.zip" \) \
+| sort > upload.lst
 TOTAL=$(wc -l < upload.lst)
 echo "Done. Found ${TOTAL} files."
 
@@ -35,11 +41,11 @@ echo -e "\nUploading files:"
 while IFS= read -r FILE
 do
     if twine upload \
-        --repository-url "${NEXUS_URL}" \
-        --username "${NEXUS_USER}" \
-        --password "${NEXUS_PASSWORD}" \
-        "${FILE}" \
-        >> "${REPORT}" 2>&1
+    --repository-url "${NEXUS_URL}" \
+    --username "${NEXUS_USER}" \
+    --password "${NEXUS_PASSWORD}" \
+    "${FILE}" \
+    >> "${REPORT}" 2>&1
     then
         echo "SUCCESS: ${FILE}" | tee -a "${REPORT}"
     else
