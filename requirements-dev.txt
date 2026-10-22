@@ -14,3 +14,4 @@ twine
 virtualenv
 wheel
 ruff
+gcovr
