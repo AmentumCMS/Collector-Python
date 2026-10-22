@@ -21,9 +21,11 @@ Use `upload.sh` on the highside to setup the venv to enable uploading
 
 ## Python runtime versions
 
-Collection jobs select the latest stable x64 Python build for the runner's Ubuntu
-version from the `actions/python-versions` manifest used by `setup-python`, rather
-than assuming every python.org release has an available Actions build.
+Collection jobs select the latest stable Linux x64 Python build from the
+`actions/python-versions` manifest used by `setup-python`, rather than assuming
+every python.org release has an available Actions build. Collection and security
+scan jobs use Ubuntu 24.04 so Python 3.9 remains available; moving these jobs to a
+newer runner requires checking build availability for every collected series.
 
 Both collection workflows read `python-runtimes.json`. Its `source_versions`
 list selects the Python source archives; `windows_versions` independently selects

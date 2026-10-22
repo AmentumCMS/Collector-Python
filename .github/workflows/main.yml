@@ -110,7 +110,7 @@ jobs:
           cat $GITHUB_OUTPUT
 
   Collect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ Setup ]
 
     permissions:
@@ -217,7 +217,7 @@ jobs:
           if-no-files-found: error
 
   SecurityScan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ Setup, Collect ]
 
     permissions:
