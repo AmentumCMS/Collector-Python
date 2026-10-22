@@ -8,9 +8,11 @@ dist/
 pypi*/
 pypi
 coverage/
+__pycache__/
 docs/
 
 # Ignore Files
+*.pyc
 *.tgz
 *.tar.gz
 *.gz
