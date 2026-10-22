@@ -54,24 +54,22 @@ jobs:
 
           python_versions=$(curl --fail --silent --show-error \
             https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json)
-          os_version=$(. /etc/os-release; echo "$VERSION_ID")
 
           get_version() {
             local version
             version=$(echo "$python_versions" \
-              | jq -r --arg series "$1" --arg os_version "$os_version" '
+              | jq -r --arg series "$1" '
                   .[] | select(.stable == true)
                   | select(.version | startswith($series + "."))
                   | select(any(.files[];
-                      .platform == "linux" and .platform_version == $os_version
-                      and .arch == "x64"))
+                      .platform == "linux" and .arch == "x64"))
                   | .version
                 ' \
               | sort -V \
               | tail -1) || return 1
 
             if [[ -z "$version" ]]; then
-              echo "No stable Python $1 x64 build available for Ubuntu $os_version" >&2
+              echo "No stable Python $1 x64 build available" >&2
               return 1
             fi
             echo "$version"
