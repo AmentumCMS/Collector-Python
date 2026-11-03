@@ -298,7 +298,7 @@ jobs:
           output-file: grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
 
       - name: Security - Scan SBOM with Trivy
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: sbom
           scan-ref: app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
