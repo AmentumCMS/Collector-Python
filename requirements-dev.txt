@@ -7,6 +7,7 @@ cyclonedx-bom
 diffoscope
 dnspython
 flake8
+gcovr
 httpx
 isort
 mypy
