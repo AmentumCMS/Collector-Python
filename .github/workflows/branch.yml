@@ -299,9 +299,25 @@ jobs:
           output-format: table
           output-file: grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
 
+      - name: Security - Install Trivy
+        env:
+          TRIVY_VERSION: 0.71.1
+        run: |
+          set -euo pipefail
+          install_dir=$(mktemp -d "$RUNNER_TEMP/trivy.XXXXXX")
+          cd "$install_dir"
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          release_url="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          curl --fail --show-error --silent --location --retry 3 "$release_url/$archive" -o "$archive"
+          curl --fail --show-error --silent --location --retry 3 "$release_url/trivy_${TRIVY_VERSION}_checksums.txt" -o checksums.txt
+          grep -F "  $archive" checksums.txt | sha256sum --check --strict -
+          tar --no-same-owner -xzf "$archive" trivy
+          echo "$install_dir" >> "$GITHUB_PATH"
+
       - name: Security - Scan SBOM with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          skip-setup-trivy: true
           scan-type: sbom
           scan-ref: app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
           scanners: vuln
