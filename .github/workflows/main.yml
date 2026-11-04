@@ -28,6 +28,7 @@ jobs:
       v312: ${{ steps.v.outputs.v312 }}
       v313: ${{ steps.v.outputs.v313 }}
       reqfile: ${{ steps.reqfile.outputs.reqfile }}
+      legacy_reqfile: ${{ steps.reqfile.outputs.legacy_reqfile }}
     steps:
       - name: Check out repository code
         uses: actions/checkout@v7
@@ -101,9 +102,11 @@ jobs:
           if [[ ${LOCK+x} ]]; then
             echo "LOCK is set, using requirements-lock.txt"
             echo "reqfile=requirements-lock.txt" >> $GITHUB_OUTPUT
+            echo "legacy_reqfile=requirements-lock-legacy.txt" >> $GITHUB_OUTPUT
           else
             echo "LOCK is not set, using requirements-dev.txt"
             echo "reqfile=requirements-dev.txt" >> $GITHUB_OUTPUT
+            echo "legacy_reqfile=requirements-legacy.txt" >> $GITHUB_OUTPUT
           fi
           echo -e "\nFile:\n$GITHUB_OUTPUT"
           echo "Values:"
@@ -112,6 +115,10 @@ jobs:
   Collect:
     runs-on: ubuntu-24.04
     needs: [ Setup ]
+    env:
+      REQUIREMENTS_FILE: >-
+        ${{ startsWith(matrix.python-version, '3.9.') &&
+        needs.Setup.outputs.legacy_reqfile || needs.Setup.outputs.reqfile }}
 
     permissions:
       contents: write
@@ -141,7 +148,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
-            ${{ needs.Setup.outputs.reqfile }}
+            ${{ env.REQUIREMENTS_FILE }}
 
       - name: Create isolated build environment
         run: |
@@ -162,11 +169,11 @@ jobs:
             echo "LOCK is set."
             python -m pip install \
               --require-hashes \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           else
             echo "LOCK is not set."
             python -m pip install \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           fi
 
       - name: Record tool versions
@@ -191,7 +198,7 @@ jobs:
           mkdir -p pypi-${{ matrix.python-version }}
           pip download \
             --dest pypi-${{ matrix.python-version }} \
-            --requirement ${{ needs.Setup.outputs.reqfile }}
+            --requirement "$REQUIREMENTS_FILE"
 
       - name: TARchive pypi directory
         run: |
@@ -219,6 +226,10 @@ jobs:
   SecurityScan:
     runs-on: ubuntu-24.04
     needs: [ Setup, Collect ]
+    env:
+      REQUIREMENTS_FILE: >-
+        ${{ startsWith(matrix.python-version, '3.9.') &&
+        needs.Setup.outputs.legacy_reqfile || needs.Setup.outputs.reqfile }}
 
     permissions:
       contents: read
@@ -249,7 +260,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
-            ${{ needs.Setup.outputs.reqfile }}
+            ${{ env.REQUIREMENTS_FILE }}
 
       - name: Create isolated build environment
         run: |
@@ -265,11 +276,11 @@ jobs:
             echo "LOCK is set."
             python -m pip install \
               --require-hashes \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           else
             echo "LOCK is not set."
             python -m pip install \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           fi
 
       - name: Restore pip cache artifact

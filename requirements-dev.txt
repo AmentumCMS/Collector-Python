@@ -1,34 +1,11 @@
--r requirements.txt
+-r requirements-common.txt
 
 anyio>=4.14.2; python_version >= "3.10"
 black; python_version >= "3.10"
-build
-cryptography
 cyclonedx-bom; python_version >= "3.10"
-diffoscope
 dnspython>=2.9.0; python_version >= "3.11"
-flake8
-gcovr
-gcovr
 httpx; python_version >= "3.10"
-isort
-jaraco-context>=6.1.0
-mypy
-packaging
-pika
-pyopenssl
-pytest
-pytest-cov
-pyyaml
-reprotest
 requests>=2.33.0; python_version >= "3.10"
-rich
-ruff
-setuptools; python_version < "3.10"
 setuptools>=84.1.0; python_version >= "3.10"
-tabulate
 twine; python_version >= "3.10"
 urllib3>=2.8.0; python_version >= "3.10"
-virtualenv>=21.14.13
-wheel>=0.46.2
-yamllint
