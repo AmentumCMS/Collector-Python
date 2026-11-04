@@ -8,7 +8,6 @@ diffoscope
 dnspython
 flake8
 gcovr
-gcovr
 httpx
 isort
 mypy
