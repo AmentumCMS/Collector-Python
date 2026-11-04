@@ -52,10 +52,18 @@ ready.
 
 Run the updater tests with `python -m unittest discover -s tests`.
 
+## Development requirements
+
+`requirements-common.txt` contains the shared toolchain. `requirements-dev.txt`
+adds tools for newer Python versions, while Python 3.9 uses
+`requirements-legacy.txt` with compatibility bounds. CI selects the matching
+requirements file and lockfile for each Python matrix entry.
+
 ## Remember:
 
-Update lockfile to keep pins/reproducible:
+Update both lockfiles to keep pins reproducible. Compile the legacy lockfile
+with Python 3.9 so its resolved packages remain compatible:
 
 ```
-pip install -r requirements-dev.txt 
 pip-compile --generate-hashes -o requirements-lock.txt requirements-dev.txt
+python3.9 -m piptools compile --generate-hashes -o requirements-lock-legacy.txt requirements-legacy.txt

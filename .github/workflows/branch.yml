@@ -8,7 +8,7 @@ on:
 
 env:
   PYTHON_RUNTIME_CONFIG: python-runtimes.json
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.15"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
   PYTHONUNBUFFERED: "1"
@@ -24,10 +24,11 @@ jobs:
     outputs:
       Date: ${{ steps.date.outputs.date }}
       v309: ${{ steps.v.outputs.v309 }}
-      v311: ${{ steps.v.outputs.v311 }}
+      v315: ${{ steps.v.outputs.v315 }}
       v312: ${{ steps.v.outputs.v312 }}
       v313: ${{ steps.v.outputs.v313 }}
       reqfile: ${{ steps.reqfile.outputs.reqfile }}
+      legacy_reqfile: ${{ steps.reqfile.outputs.legacy_reqfile }}
     steps:
       - name: Check out repository code
         uses: actions/checkout@v7
@@ -76,19 +77,19 @@ jobs:
           }
 
           v309=$(get_version 3.9)
-          v311=$(get_version 3.11)
           v312=$(get_version 3.12)
           v313=$(get_version 3.13)
+          v315=$(get_version 3.15)
 
           echo "The latest Python 3.9 version is: $v309"
-          echo "The latest Python 3.11 version is: $v311"
           echo "The latest Python 3.12 version is: $v312"
           echo "The latest Python 3.13 version is: $v313"
+          echo "The latest Python 3.15 version is: $v315"
 
           echo "v309=${v309}" >> $GITHUB_OUTPUT
-          echo "v311=${v311}" >> $GITHUB_OUTPUT
           echo "v312=${v312}" >> $GITHUB_OUTPUT
           echo "v313=${v313}" >> $GITHUB_OUTPUT
+          echo "v315=${v315}" >> $GITHUB_OUTPUT
 
           echo -e "\nFile:\n$GITHUB_OUTPUT"
           echo "Values:"
@@ -101,9 +102,11 @@ jobs:
           if [[ ${LOCK+x} ]]; then
             echo "LOCK is set, using requirements-lock.txt"
             echo "reqfile=requirements-lock.txt" >> $GITHUB_OUTPUT
+            echo "legacy_reqfile=requirements-lock-legacy.txt" >> $GITHUB_OUTPUT
           else
             echo "LOCK is not set, using requirements-dev.txt"
             echo "reqfile=requirements-dev.txt" >> $GITHUB_OUTPUT
+            echo "legacy_reqfile=requirements-legacy.txt" >> $GITHUB_OUTPUT
           fi
           echo -e "\nFile:\n$GITHUB_OUTPUT"
           echo "Values:"
@@ -112,6 +115,10 @@ jobs:
   Collect:
     runs-on: ubuntu-24.04
     needs: [ Setup ]
+    env:
+      REQUIREMENTS_FILE: >-
+        ${{ startsWith(matrix.python-version, '3.9.') &&
+        needs.Setup.outputs.legacy_reqfile || needs.Setup.outputs.reqfile }}
 
     permissions:
       contents: write
@@ -122,9 +129,9 @@ jobs:
       matrix:
         python-version:
           - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v311 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
+          - ${{ needs.Setup.outputs.v315 }}
 
     steps:
       - name: Check out repository code
@@ -141,7 +148,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
-            ${{ needs.Setup.outputs.reqfile }}
+            ${{ env.REQUIREMENTS_FILE }}
 
       - name: Create isolated build environment
         run: |
@@ -162,11 +169,11 @@ jobs:
             echo "LOCK is set."
             python -m pip install \
               --require-hashes \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           else
             echo "LOCK is not set."
             python -m pip install \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           fi
 
       - name: Record tool versions
@@ -191,7 +198,7 @@ jobs:
           mkdir -p pypi-${{ matrix.python-version }}
           pip download \
             --dest pypi-${{ matrix.python-version }} \
-            --requirement ${{ needs.Setup.outputs.reqfile }}
+            --requirement "$REQUIREMENTS_FILE"
 
       - name: TARchive pypi directory
         run: |
@@ -219,6 +226,10 @@ jobs:
   SecurityScan:
     runs-on: ubuntu-24.04
     needs: [ Setup, Collect ]
+    env:
+      REQUIREMENTS_FILE: >-
+        ${{ startsWith(matrix.python-version, '3.9.') &&
+        needs.Setup.outputs.legacy_reqfile || needs.Setup.outputs.reqfile }}
 
     permissions:
       contents: read
@@ -230,9 +241,9 @@ jobs:
       matrix:
         python-version:
           - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v311 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
+          - ${{ needs.Setup.outputs.v315 }}
 
     steps:
       - name: Check out repository code
@@ -249,7 +260,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
-            ${{ needs.Setup.outputs.reqfile }}
+            ${{ env.REQUIREMENTS_FILE }}
 
       - name: Create isolated build environment
         run: |
@@ -265,11 +276,11 @@ jobs:
             echo "LOCK is set."
             python -m pip install \
               --require-hashes \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           else
             echo "LOCK is not set."
             python -m pip install \
-              --requirement ${{ needs.Setup.outputs.reqfile }}
+              --requirement "$REQUIREMENTS_FILE"
           fi
 
       - name: Restore pip cache artifact
