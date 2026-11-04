@@ -1,0 +1,4 @@
+-r requirements-common.txt
+
+mypy<2
+pytest<9

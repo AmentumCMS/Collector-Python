@@ -1,30 +1,11 @@
--r requirements.txt
+-r requirements-common.txt
 
-black
-build
-cryptography
-cyclonedx-bom
-diffoscope
-dnspython
-flake8
-gcovr
-httpx
-isort
-mypy
-packaging
-pika
-pyopenssl
-pytest
-pytest-cov
-pyyaml
-reprotest
-requests
-rich
-ruff
-setuptools
-tabulate
-twine
-urllib3
-virtualenv
-wheel
-yamllint
+anyio>=4.14.2; python_version >= "3.10"
+black; python_version >= "3.10"
+cyclonedx-bom; python_version >= "3.10"
+dnspython>=2.9.0; python_version >= "3.11"
+httpx; python_version >= "3.10"
+requests>=2.33.0; python_version >= "3.10"
+setuptools>=84.1.0; python_version >= "3.10"
+twine; python_version >= "3.10"
+urllib3>=2.8.0; python_version >= "3.10"

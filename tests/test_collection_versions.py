@@ -20,10 +20,10 @@ class CollectionVersionTests(unittest.TestCase):
     def setUp(self):
         self.manifest = [
             self.release("3.9.25"),
-            self.release("3.11.14"),
             self.release("3.12.12"),
             self.release("3.13.9"),
             self.release("3.13.10"),
+            self.release("3.15.1"),
         ]
 
     def release(self, version, stable=True, **file_overrides):
@@ -72,13 +72,14 @@ curl() {
             self.release("3.13.20", arch="x64-freethreaded"),
             self.release("3.13.21rc1", stable=False),
             self.release("3.14.1"),
+            self.release("3.15.2"),
         ])
         for workflow in WORKFLOWS:
             with self.subTest(workflow=workflow):
                 result, output = self.discover(workflow)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.splitlines(), [
-                    "v309=3.9.25", "v311=3.11.14", "v312=3.12.12", "v313=3.13.17",
+                    "v309=3.9.25", "v312=3.12.12", "v313=3.13.17", "v315=3.15.2",
                 ])
 
     def test_python_matrix_jobs_use_runner_with_python_39_builds(self):
@@ -92,12 +93,12 @@ curl() {
                     )
 
     def test_missing_series_fails_without_publishing_outputs(self):
-        self.manifest = [r for r in self.manifest if not r["version"].startswith("3.13.")]
+        self.manifest = [r for r in self.manifest if not r["version"].startswith("3.15.")]
         for workflow in WORKFLOWS:
             with self.subTest(workflow=workflow):
                 result, output = self.discover(workflow)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("No stable Python 3.13 x64 build available", result.stderr)
+                self.assertIn("No stable Python 3.15 x64 build available", result.stderr)
                 self.assertEqual(output, "")
 
     def test_invalid_manifest_and_download_failure_fail_without_outputs(self):
