@@ -8,7 +8,7 @@ on:
 
 env:
   PYTHON_RUNTIME_CONFIG: python-runtimes.json
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.15"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
   PYTHONUNBUFFERED: "1"
@@ -24,7 +24,7 @@ jobs:
     outputs:
       Date: ${{ steps.date.outputs.date }}
       v309: ${{ steps.v.outputs.v309 }}
-      v311: ${{ steps.v.outputs.v311 }}
+      v315: ${{ steps.v.outputs.v315 }}
       v312: ${{ steps.v.outputs.v312 }}
       v313: ${{ steps.v.outputs.v313 }}
       reqfile: ${{ steps.reqfile.outputs.reqfile }}
@@ -77,17 +77,17 @@ jobs:
           }
 
           v309=$(get_version 3.9)
-          v311=$(get_version 3.11)
+          v315=$(get_version 3.15)
           v312=$(get_version 3.12)
           v313=$(get_version 3.13)
 
           echo "The latest Python 3.9 version is: $v309"
-          echo "The latest Python 3.11 version is: $v311"
+          echo "The latest Python 3.15 version is: $v315"
           echo "The latest Python 3.12 version is: $v312"
           echo "The latest Python 3.13 version is: $v313"
 
           echo "v309=${v309}" >> $GITHUB_OUTPUT
-          echo "v311=${v311}" >> $GITHUB_OUTPUT
+          echo "v315=${v315}" >> $GITHUB_OUTPUT
           echo "v312=${v312}" >> $GITHUB_OUTPUT
           echo "v313=${v313}" >> $GITHUB_OUTPUT
 
@@ -129,7 +129,7 @@ jobs:
       matrix:
         python-version:
           - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v311 }}
+          - ${{ needs.Setup.outputs.v315 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
 
@@ -241,7 +241,7 @@ jobs:
       matrix:
         python-version:
           - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v311 }}
+          - ${{ needs.Setup.outputs.v315 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
 
