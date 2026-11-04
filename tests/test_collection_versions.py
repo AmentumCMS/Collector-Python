@@ -12,33 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ("branch.yml", "main.yml")
 
 
-@unittest.skipUnless(
-    shutil.which("bash") and shutil.which("jq"),
-    "Collection version discovery requires bash and jq",
-)
 class CollectionVersionTests(unittest.TestCase):
     def setUp(self):
-        self.manifest = [
-            self.release("3.9.25"),
-            self.release("3.11.14"),
-            self.release("3.12.12"),
-            self.release("3.13.9"),
-            self.release("3.13.10"),
-        ]
+        self.config = json.loads((ROOT / "python-runtimes.json").read_text())
 
-    def release(self, version, stable=True, **file_overrides):
-        return {
-            "version": version,
-            "stable": stable,
-            "files": [{
-                "platform": "linux",
-                "platform_version": "24.04",
-                "arch": "x64",
-                **file_overrides,
-            }],
-        }
-
-    def discover(self, workflow, manifest=None, curl_status=0):
+    def discover(self, workflow, config=None):
+        if not (shutil.which("bash") and shutil.which("jq")):
+            self.skipTest("Collection matrix generation requires bash and jq")
         contents = (ROOT / ".github" / "workflows" / workflow).read_text()
         step = contents.split("      - name: Get current Python versions\n", 1)[1]
         script = textwrap.dedent(step.split("        run: |\n", 1)[1].split(
@@ -46,70 +26,82 @@ class CollectionVersionTests(unittest.TestCase):
         )[0])
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "output"
+            runtime_config = Path(directory) / "runtimes.json"
+            runtime_config.write_text(json.dumps(self.config if config is None else config))
             result = subprocess.run(
-                ["bash", "-c", """
-curl() {
-    printf '%s' "$TEST_MANIFEST"
-    return "$TEST_CURL_STATUS"
-}
-""" + script],
+                ["bash", "-c", script],
                 env={
                     **os.environ,
-                    "GITHUB_OUTPUT": str(output),
-                    "TEST_MANIFEST": json.dumps(self.manifest) if manifest is None else manifest,
-                    "TEST_CURL_STATUS": str(curl_status),
+                    "GITHUB_OUTPUT": output.as_posix(),
+                    "PYTHON_RUNTIME_CONFIG": runtime_config.as_posix(),
                 },
                 capture_output=True,
                 text=True,
             )
             return result, output.read_text() if output.exists() else ""
 
-    def test_selects_latest_stable_build_independent_of_ubuntu_version(self):
-        self.manifest.extend([
-            self.release("3.13.17", platform_version="22.04"),
-            self.release("3.13.18", platform="darwin"),
-            self.release("3.13.19", arch="arm64"),
-            self.release("3.13.20", arch="x64-freethreaded"),
-            self.release("3.13.21rc1", stable=False),
-            self.release("3.14.1"),
-        ])
+    def test_matrix_uses_configured_red_hat_images(self):
         for workflow in WORKFLOWS:
             with self.subTest(workflow=workflow):
                 result, output = self.discover(workflow)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(output.splitlines(), [
-                    "v309=3.9.25", "v311=3.11.14", "v312=3.12.12", "v313=3.13.17",
-                ])
+                self.assertEqual(json.loads(output.removeprefix("matrix=")), {
+                    "include": self.config["collection_targets"],
+                })
 
-    def test_python_matrix_jobs_use_runner_with_python_39_builds(self):
+    def test_base_and_additional_rhel_streams_are_separate(self):
+        targets = self.config["collection_targets"]
+        labels = [target["python-version"] for target in targets]
+        self.assertEqual(len(labels), len(set(labels)))
+        self.assertEqual(set(labels), {
+            "rhel9-python3.9", "rhel9-python3.11", "rhel9-python3.12",
+            "rhel9-python3.14", "rhel10-python3.12", "rhel10-python3.14",
+        })
+        for target in targets:
+            major = target["python-version"].split("-", 1)[0].removeprefix("rhel")
+            self.assertEqual(target["python-version"], f"rhel{major}-python{target['series']}")
+            self.assertIn(f"/ubi{major}/python-{target['series'].replace('.', '')}", target["image"])
+
+    def test_only_collection_runs_inside_ubi(self):
         for workflow in WORKFLOWS:
             contents = (ROOT / ".github" / "workflows" / workflow).read_text()
-            for job in ("Collect", "SecurityScan"):
-                with self.subTest(workflow=workflow, job=job):
-                    self.assertRegex(
-                        contents,
-                        rf"(?m)^  {job}:\n    runs-on: ubuntu-24\.04$",
-                    )
+            collect = contents.split("  Collect:\n", 1)[1].split("  SecurityScan:\n", 1)[0]
+            scan = contents.split("  SecurityScan:\n", 1)[1].split("  MakeISO:\n", 1)[0]
+            with self.subTest(workflow=workflow):
+                self.assertIn("image: ${{ matrix.image }}", collect)
+                self.assertIn("options: --user 0", collect)
+                self.assertIn("shell: bash", collect)
+                self.assertIn("microdnf install -y git tar gzip findutils", collect)
+                self.assertIn("python${{ matrix.series }} -m venv", collect)
+                self.assertIn("collection-environment.txt", collect)
+                self.assertIn("hash_args+=(--require-hashes)", collect)
+                for job in (collect, scan):
+                    self.assertIn("fromJSON(needs.Setup.outputs.matrix)", job)
+                    self.assertNotIn("actions/setup-python", job)
+                    self.assertIn("pypi-${{ matrix.python-version }}", job)
+                self.assertNotIn("pip install", scan)
 
-    def test_missing_series_fails_without_publishing_outputs(self):
-        self.manifest = [r for r in self.manifest if not r["version"].startswith("3.13.")]
+    def test_source_and_windows_versions_do_not_control_collection(self):
+        self.config["source_versions"] = ["3.15.1"]
+        self.config["windows_versions"] = ["3.11.9"]
         for workflow in WORKFLOWS:
             with self.subTest(workflow=workflow):
                 result, output = self.discover(workflow)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("No stable Python 3.13 x64 build available", result.stderr)
-                self.assertEqual(output, "")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(output.removeprefix("matrix="))["include"],
+                                 self.config["collection_targets"])
 
-    def test_invalid_manifest_and_download_failure_fail_without_outputs(self):
+    def test_invalid_targets_fail_without_publishing_outputs(self):
+        target = self.config["collection_targets"][0]
         for workflow in WORKFLOWS:
-            for manifest, curl_status in (
-                ("not json", 0),
-                ("[]", 0),
-                ("[]", 22),
-                (json.dumps(self.manifest + ["malformed entry"]), 0),
+            for targets in (
+                None, [], "invalid", [target, target], [{}],
+                [{**target, "series": "invalid"}],
+                [{**target, "image": "ubuntu:latest"}],
+                [{**target, "python-version": "../invalid"}],
             ):
-                with self.subTest(workflow=workflow, manifest=manifest, status=curl_status):
-                    result, output = self.discover(workflow, manifest, curl_status)
+                with self.subTest(workflow=workflow, targets=targets):
+                    result, output = self.discover(workflow, {"collection_targets": targets})
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(output, "")
 

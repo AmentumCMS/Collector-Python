@@ -1,4 +1,12 @@
 {
+  "collection_targets": [
+    {"python-version": "rhel9-python3.9", "series": "3.9", "image": "registry.access.redhat.com/ubi9/python-39:latest"},
+    {"python-version": "rhel9-python3.11", "series": "3.11", "image": "registry.access.redhat.com/ubi9/python-311:latest"},
+    {"python-version": "rhel9-python3.12", "series": "3.12", "image": "registry.access.redhat.com/ubi9/python-312:latest"},
+    {"python-version": "rhel9-python3.14", "series": "3.14", "image": "registry.access.redhat.com/ubi9/python-314:latest"},
+    {"python-version": "rhel10-python3.12", "series": "3.12", "image": "registry.access.redhat.com/ubi10/python-312-minimal:latest"},
+    {"python-version": "rhel10-python3.14", "series": "3.14", "image": "registry.access.redhat.com/ubi10/python-314-minimal:latest"}
+  ],
   "source_versions": [
     "3.11.13",
     "3.12.11",
