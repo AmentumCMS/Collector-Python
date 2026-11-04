@@ -21,6 +21,7 @@ WORKFLOWS = ("branch.yml", "main.yml")
 class TrivyInstallationTests(unittest.TestCase):
     def install(self, workflow, corrupt=False, curl_status=0, missing_checksum=False):
         contents = (ROOT / ".github" / "workflows" / workflow).read_text()
+        self.assertIn("  SecurityScan:\n    runs-on: ubuntu-24.04\n", contents)
         step = contents.split("      - name: Security - Install Trivy\n", 1)[1]
         step, scan = step.split("      - name: Security - Scan SBOM with Trivy\n", 1)
         version = step.split("          TRIVY_VERSION: ", 1)[1].splitlines()[0]
