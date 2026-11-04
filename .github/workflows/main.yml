@@ -20,7 +20,7 @@ env:
 
 jobs:
   Setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       Date: ${{ steps.date.outputs.date }}
       v309: ${{ steps.v.outputs.v309 }}
@@ -54,24 +54,22 @@ jobs:
 
           python_versions=$(curl --fail --silent --show-error \
             https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json)
-          os_version=$(. /etc/os-release; echo "$VERSION_ID")
 
           get_version() {
             local version
             version=$(echo "$python_versions" \
-              | jq -r --arg series "$1" --arg os_version "$os_version" '
+              | jq -r --arg series "$1" '
                   .[] | select(.stable == true)
                   | select(.version | startswith($series + "."))
                   | select(any(.files[];
-                      .platform == "linux" and .platform_version == $os_version
-                      and .arch == "x64"))
+                      .platform == "linux" and .arch == "x64"))
                   | .version
                 ' \
               | sort -V \
               | tail -1) || return 1
 
             if [[ -z "$version" ]]; then
-              echo "No stable Python $1 x64 build available for Ubuntu $os_version" >&2
+              echo "No stable Python $1 x64 build available" >&2
               return 1
             fi
             echo "$version"
@@ -112,7 +110,7 @@ jobs:
           cat $GITHUB_OUTPUT
 
   Collect:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ Setup ]
 
     permissions:
@@ -219,7 +217,7 @@ jobs:
           if-no-files-found: error
 
   SecurityScan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ Setup, Collect ]
 
     permissions:
@@ -299,9 +297,25 @@ jobs:
           output-format: table
           output-file: grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
 
+      - name: Security - Install Trivy
+        env:
+          TRIVY_VERSION: 0.71.1
+        run: |
+          set -euo pipefail
+          install_dir=$(mktemp -d "$RUNNER_TEMP/trivy.XXXXXX")
+          cd "$install_dir"
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          release_url="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          curl --fail --show-error --silent --location --retry 3 "$release_url/$archive" -o "$archive"
+          curl --fail --show-error --silent --location --retry 3 "$release_url/trivy_${TRIVY_VERSION}_checksums.txt" -o checksums.txt
+          grep -F "  $archive" checksums.txt | sha256sum --check --strict -
+          tar --no-same-owner -xzf "$archive" trivy
+          echo "$install_dir" >> "$GITHUB_PATH"
+
       - name: Security - Scan SBOM with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          skip-setup-trivy: true
           scan-type: sbom
           scan-ref: app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
           scanners: vuln
