@@ -23,7 +23,10 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       Date: ${{ steps.date.outputs.date }}
-      matrix: ${{ steps.v.outputs.matrix }}
+      v309: ${{ steps.v.outputs.v309 }}
+      v311: ${{ steps.v.outputs.v311 }}
+      v312: ${{ steps.v.outputs.v312 }}
+      v313: ${{ steps.v.outputs.v313 }}
       reqfile: ${{ steps.reqfile.outputs.reqfile }}
     steps:
       - name: Check out repository code
@@ -47,18 +50,51 @@ jobs:
         id: v
         run: |
           set -euo pipefail
-          matrix=$(jq -ce '
-            .collection_targets
-            | if type == "array" and length > 0 and
-                all(.[];
-                  (.series | test("^3[.][0-9]+$")) and
-                  (.image | test("^registry[.]access[.]redhat[.]com/ubi(9|10)/python-[0-9]+(-minimal)?:[^ ]+$")) and
-                  (."python-version" | test("^rhel(9|10)-python3[.][0-9]+$"))) and
-                (map(."python-version") | length == (unique | length))
-              then {include: .}
-              else error("Invalid collection_targets") end
-          ' "$PYTHON_RUNTIME_CONFIG")
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo -e "Getting versions"
+
+          python_versions=$(curl --fail --silent --show-error \
+            https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json)
+          os_version=$(. /etc/os-release; echo "$VERSION_ID")
+
+          get_version() {
+            local version
+            version=$(echo "$python_versions" \
+              | jq -r --arg series "$1" --arg os_version "$os_version" '
+                  .[] | select(.stable == true)
+                  | select(.version | startswith($series + "."))
+                  | select(any(.files[];
+                      .platform == "linux" and .platform_version == $os_version
+                      and .arch == "x64"))
+                  | .version
+                ' \
+              | sort -V \
+              | tail -1) || return 1
+
+            if [[ -z "$version" ]]; then
+              echo "No stable Python $1 x64 build available for Ubuntu $os_version" >&2
+              return 1
+            fi
+            echo "$version"
+          }
+
+          v309=$(get_version 3.9)
+          v311=$(get_version 3.11)
+          v312=$(get_version 3.12)
+          v313=$(get_version 3.13)
+
+          echo "The latest Python 3.9 version is: $v309"
+          echo "The latest Python 3.11 version is: $v311"
+          echo "The latest Python 3.12 version is: $v312"
+          echo "The latest Python 3.13 version is: $v313"
+
+          echo "v309=${v309}" >> $GITHUB_OUTPUT
+          echo "v311=${v311}" >> $GITHUB_OUTPUT
+          echo "v312=${v312}" >> $GITHUB_OUTPUT
+          echo "v313=${v313}" >> $GITHUB_OUTPUT
+
+          echo -e "\nFile:\n$GITHUB_OUTPUT"
+          echo "Values:"
+          cat $GITHUB_OUTPUT
 
       - name: Get requirements file
         id: reqfile
@@ -76,14 +112,8 @@ jobs:
           cat $GITHUB_OUTPUT
 
   Collect:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: [ Setup ]
-    container:
-      image: ${{ matrix.image }}
-      options: --user 0
-    defaults:
-      run:
-        shell: bash
 
     permissions:
       contents: write
@@ -91,18 +121,14 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.Setup.outputs.matrix) }}
+      matrix:
+        python-version:
+          - ${{ needs.Setup.outputs.v309 }}
+          - ${{ needs.Setup.outputs.v311 }}
+          - ${{ needs.Setup.outputs.v312 }}
+          - ${{ needs.Setup.outputs.v313 }}
 
     steps:
-      - name: Install container utilities
-        run: |
-          set -euo pipefail
-          if command -v microdnf > /dev/null; then
-            microdnf install -y git tar gzip findutils
-          else
-            dnf install -y git tar gzip findutils
-          fi
-
       - name: Check out repository code
         uses: actions/checkout@v7
         with:
@@ -111,14 +137,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            ${{ needs.Setup.outputs.reqfile }}
+
       - name: Create isolated build environment
         run: |
           set -euo pipefail
-          python${{ matrix.series }} -c 'import sys; assert ".".join(map(str, sys.version_info[:2])) == "${{ matrix.series }}", sys.version'
-          python${{ matrix.series }} -m venv .venv
+          python -m venv .venv
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
 
-      - name: Install collection tooling
+      - name: Install the locked development toolchain
         run: |
           set -euo pipefail
           python -m pip install \
@@ -127,6 +160,16 @@ jobs:
             pip-tools \
             setuptools \
             wheel
+          if [[ ${LOCK+x} ]]; then
+            echo "LOCK is set."
+            python -m pip install \
+              --require-hashes \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          else
+            echo "LOCK is not set."
+            python -m pip install \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          fi
 
       - name: Record tool versions
         run: |
@@ -134,30 +177,27 @@ jobs:
           source .venv/bin/activate
           python --version
           python -m pip --version
-          mkdir -p pypi-${{ matrix.python-version }}
-          {
-            echo 'Image: ${{ matrix.image }}'
-            cat /etc/os-release
-            python --version
-            python -m pip --version
-            python -m pip debug --verbose
-          } > pypi-${{ matrix.python-version }}/collection-environment.txt
+          # python -m pip-tools --version
+          ruff --version
+          mypy --version
+          pytest --version
+          diffoscope --version
+
+      - name: Set up Git
+        run: |
+          git config user.name "$(git log -n 1 --pretty=format:%an)"
+          git config user.email "$(git log -n 1 --pretty=format:%ae)"
 
       - name: Collect pypi artifacts
         run: |
-          set -euo pipefail
           mkdir -p pypi-${{ matrix.python-version }}
-          hash_args=()
-          if [[ ${LOCK+x} ]]; then
-            hash_args+=(--require-hashes)
-          fi
-          python -m pip download "${hash_args[@]}" \
+          pip download \
             --dest pypi-${{ matrix.python-version }} \
             --requirement ${{ needs.Setup.outputs.reqfile }}
 
       - name: TARchive pypi directory
         run: |
-          tar -czvf ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz \
+          tar -cvI pigz -f ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz \
             pypi-${{ matrix.python-version }} requirements*.txt \
             | tee ${{ vars.COLLECTOR }}-pypi-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.tgz.txt
 
@@ -179,7 +219,7 @@ jobs:
           if-no-files-found: error
 
   SecurityScan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     needs: [ Setup, Collect ]
 
     permissions:
@@ -189,7 +229,12 @@ jobs:
 
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.Setup.outputs.matrix) }}
+      matrix:
+        python-version:
+          - ${{ needs.Setup.outputs.v309 }}
+          - ${{ needs.Setup.outputs.v311 }}
+          - ${{ needs.Setup.outputs.v312 }}
+          - ${{ needs.Setup.outputs.v313 }}
 
     steps:
       - name: Check out repository code
@@ -199,6 +244,35 @@ jobs:
           lfs: true
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            ${{ needs.Setup.outputs.reqfile }}
+
+      - name: Create isolated build environment
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install the locked development toolchain
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          if [[ ${LOCK+x} ]]; then
+            echo "LOCK is set."
+            python -m pip install \
+              --require-hashes \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          else
+            echo "LOCK is not set."
+            python -m pip install \
+              --requirement ${{ needs.Setup.outputs.reqfile }}
+          fi
 
       - name: Restore pip cache artifact
         uses: actions/download-artifact@v8
@@ -225,9 +299,25 @@ jobs:
           output-format: table
           output-file: grype-report-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.txt
 
+      - name: Security - Install Trivy
+        env:
+          TRIVY_VERSION: 0.71.1
+        run: |
+          set -euo pipefail
+          install_dir=$(mktemp -d "$RUNNER_TEMP/trivy.XXXXXX")
+          cd "$install_dir"
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          release_url="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          curl --fail --show-error --silent --location --retry 3 "$release_url/$archive" -o "$archive"
+          curl --fail --show-error --silent --location --retry 3 "$release_url/trivy_${TRIVY_VERSION}_checksums.txt" -o checksums.txt
+          grep -F "  $archive" checksums.txt | sha256sum --check --strict -
+          tar --no-same-owner -xzf "$archive" trivy
+          echo "$install_dir" >> "$GITHUB_PATH"
+
       - name: Security - Scan SBOM with Trivy
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          skip-setup-trivy: true
           scan-type: sbom
           scan-ref: app-sbom.cdx-${{ matrix.python-version }}-${{ needs.Setup.outputs.Date }}.json
           scanners: vuln
@@ -450,18 +540,15 @@ jobs:
       - name: Copy Markdowns to ISO
         run: cp -v *.md ISO/
 
-      - name: Copy scripts to ISO
-        run: cp -v *.sh ISO/
-
-      - name: Copy package manifests to ISO
-        run: |
-          cp -v requirements*.txt ISO/
-
       - name: Move evidence to ISO/evidence
         run: |
           mkdir -p ISO/evidence
           mv -v ISO/*report* ISO/evidence/
           mv -v ISO/*sbom* ISO/evidence/
+
+      - name: Copy package manifests to ISO
+        run: |
+          cp -v requirements*.txt ISO/
 
       - name: Package source repository into ISO
         run: |
