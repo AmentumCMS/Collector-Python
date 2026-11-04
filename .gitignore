@@ -12,6 +12,7 @@ __pycache__/
 docs/
 
 # Ignore Files
+*.pyc
 *.tgz
 *.tar.gz
 *.gz

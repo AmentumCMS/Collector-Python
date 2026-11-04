@@ -13,14 +13,11 @@ WORKFLOWS = ("branch.yml", "main.yml")
 
 
 @unittest.skipUnless(
-    shutil.which("bash") and shutil.which("jq") and Path("/etc/os-release").exists(),
-    "Collection version discovery requires bash, jq, and /etc/os-release",
+    shutil.which("bash") and shutil.which("jq"),
+    "Collection version discovery requires bash and jq",
 )
 class CollectionVersionTests(unittest.TestCase):
     def setUp(self):
-        self.os_version = subprocess.check_output(
-            ["bash", "-c", '. /etc/os-release; echo "$VERSION_ID"'], text=True
-        ).strip()
         self.manifest = [
             self.release("3.9.25"),
             self.release("3.11.14"),
@@ -35,7 +32,7 @@ class CollectionVersionTests(unittest.TestCase):
             "stable": stable,
             "files": [{
                 "platform": "linux",
-                "platform_version": self.os_version,
+                "platform_version": "24.04",
                 "arch": "x64",
                 **file_overrides,
             }],
@@ -67,9 +64,9 @@ curl() {
             )
             return result, output.read_text() if output.exists() else ""
 
-    def test_selects_latest_supported_stable_build_for_each_series(self):
+    def test_selects_latest_stable_build_independent_of_ubuntu_version(self):
         self.manifest.extend([
-            self.release("3.13.17", platform_version="unsupported"),
+            self.release("3.13.17", platform_version="22.04"),
             self.release("3.13.18", platform="darwin"),
             self.release("3.13.19", arch="arm64"),
             self.release("3.13.20", arch="x64-freethreaded"),
@@ -81,8 +78,18 @@ curl() {
                 result, output = self.discover(workflow)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.splitlines(), [
-                    "v309=3.9.25", "v311=3.11.14", "v312=3.12.12", "v313=3.13.10",
+                    "v309=3.9.25", "v311=3.11.14", "v312=3.12.12", "v313=3.13.17",
                 ])
+
+    def test_python_matrix_jobs_use_runner_with_python_39_builds(self):
+        for workflow in WORKFLOWS:
+            contents = (ROOT / ".github" / "workflows" / workflow).read_text()
+            for job in ("Collect", "SecurityScan"):
+                with self.subTest(workflow=workflow, job=job):
+                    self.assertRegex(
+                        contents,
+                        rf"(?m)^  {job}:\n    runs-on: ubuntu-24\.04$",
+                    )
 
     def test_missing_series_fails_without_publishing_outputs(self):
         self.manifest = [r for r in self.manifest if not r["version"].startswith("3.13.")]
