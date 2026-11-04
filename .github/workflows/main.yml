@@ -20,7 +20,7 @@ env:
 
 jobs:
   Setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       Date: ${{ steps.date.outputs.date }}
       v309: ${{ steps.v.outputs.v309 }}
