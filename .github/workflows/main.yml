@@ -77,19 +77,19 @@ jobs:
           }
 
           v309=$(get_version 3.9)
-          v315=$(get_version 3.15)
           v312=$(get_version 3.12)
           v313=$(get_version 3.13)
+          v315=$(get_version 3.15)
 
           echo "The latest Python 3.9 version is: $v309"
-          echo "The latest Python 3.15 version is: $v315"
           echo "The latest Python 3.12 version is: $v312"
           echo "The latest Python 3.13 version is: $v313"
+          echo "The latest Python 3.15 version is: $v315"
 
           echo "v309=${v309}" >> $GITHUB_OUTPUT
-          echo "v315=${v315}" >> $GITHUB_OUTPUT
           echo "v312=${v312}" >> $GITHUB_OUTPUT
           echo "v313=${v313}" >> $GITHUB_OUTPUT
+          echo "v315=${v315}" >> $GITHUB_OUTPUT
 
           echo -e "\nFile:\n$GITHUB_OUTPUT"
           echo "Values:"
@@ -129,9 +129,9 @@ jobs:
       matrix:
         python-version:
           - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v315 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
+          - ${{ needs.Setup.outputs.v315 }}
 
     steps:
       - name: Check out repository code
@@ -241,9 +241,9 @@ jobs:
       matrix:
         python-version:
           - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v315 }}
           - ${{ needs.Setup.outputs.v312 }}
           - ${{ needs.Setup.outputs.v313 }}
+          - ${{ needs.Setup.outputs.v315 }}
 
     steps:
       - name: Check out repository code
