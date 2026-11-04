@@ -1,16 +1,19 @@
 -r requirements.txt
 
+anyio>=3.7.1,<4; python_version < "3.10"
+anyio>=4.14.2; python_version >= "3.10"
 black
 build
 cryptography
 cyclonedx-bom
 diffoscope
-dnspython
+dnspython>=2.9.0; python_version >= "3.11"
 flake8
 gcovr
 gcovr
 httpx
 isort
+jaraco-context>=6.1.0
 mypy
 packaging
 pika
@@ -19,13 +22,14 @@ pytest
 pytest-cov
 pyyaml
 reprotest
-requests
+requests>=2.33.0; python_version >= "3.10"
 rich
 ruff
-setuptools
+setuptools; python_version < "3.10"
+setuptools>=84.1.0; python_version >= "3.10"
 tabulate
 twine
-urllib3
-virtualenv
-wheel
+urllib3>=2.8.0; python_version >= "3.10"
+virtualenv>=21.14.13
+wheel>=0.46.2
 yamllint
