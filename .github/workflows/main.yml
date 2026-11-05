@@ -26,10 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       Date: ${{ steps.date.outputs.date }}
-      v309: ${{ steps.v.outputs.v309 }}
-      v315: ${{ steps.v.outputs.v315 }}
-      v312: ${{ steps.v.outputs.v312 }}
-      v313: ${{ steps.v.outputs.v313 }}
+      versions: ${{ steps.v.outputs.versions }}
       reqfile: ${{ steps.reqfile.outputs.reqfile }}
       legacy_reqfile: ${{ steps.reqfile.outputs.legacy_reqfile }}
     steps:
@@ -79,20 +76,19 @@ jobs:
             echo "$version"
           }
 
-          v309=$(get_version 3.9)
-          v312=$(get_version 3.12)
-          v313=$(get_version 3.13)
-          v315=$(get_version 3.15)
+          versions=()
+          while IFS= read -r series; do
+            version=$(get_version "$series")
+            echo "The latest Python $series version is: $version"
+            versions+=("$version")
+          done < <(jq -r '.collection_series[]' "$PYTHON_RUNTIME_CONFIG")
 
-          echo "The latest Python 3.9 version is: $v309"
-          echo "The latest Python 3.12 version is: $v312"
-          echo "The latest Python 3.13 version is: $v313"
-          echo "The latest Python 3.15 version is: $v315"
+          if [[ ${#versions[@]} -eq 0 ]]; then
+            echo "collection_series in $PYTHON_RUNTIME_CONFIG is empty" >&2
+            exit 1
+          fi
 
-          echo "v309=${v309}" >> $GITHUB_OUTPUT
-          echo "v312=${v312}" >> $GITHUB_OUTPUT
-          echo "v313=${v313}" >> $GITHUB_OUTPUT
-          echo "v315=${v315}" >> $GITHUB_OUTPUT
+          echo "versions=$(printf '%s\n' "${versions[@]}" | jq -R . | jq -sc .)" >> $GITHUB_OUTPUT
 
           echo -e "\nFile:\n$GITHUB_OUTPUT"
           echo "Values:"
@@ -130,11 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v312 }}
-          - ${{ needs.Setup.outputs.v313 }}
-          - ${{ needs.Setup.outputs.v315 }}
+        python-version: ${{ fromJSON(needs.Setup.outputs.versions) }}
 
     steps:
       - name: Check out repository code
@@ -242,11 +234,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - ${{ needs.Setup.outputs.v309 }}
-          - ${{ needs.Setup.outputs.v312 }}
-          - ${{ needs.Setup.outputs.v313 }}
-          - ${{ needs.Setup.outputs.v315 }}
+        python-version: ${{ fromJSON(needs.Setup.outputs.versions) }}
 
     steps:
       - name: Check out repository code

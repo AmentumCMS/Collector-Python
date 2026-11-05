@@ -23,6 +23,7 @@ class CollectionVersionTests(unittest.TestCase):
             self.release("3.12.12"),
             self.release("3.13.9"),
             self.release("3.13.10"),
+            self.release("3.14.1"),
             self.release("3.15.1"),
         ]
 
@@ -56,6 +57,7 @@ curl() {
                 env={
                     **os.environ,
                     "GITHUB_OUTPUT": str(output),
+                    "PYTHON_RUNTIME_CONFIG": str(ROOT / "python-runtimes.json"),
                     "TEST_MANIFEST": json.dumps(self.manifest) if manifest is None else manifest,
                     "TEST_CURL_STATUS": str(curl_status),
                 },
@@ -79,7 +81,7 @@ curl() {
                 result, output = self.discover(workflow)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.splitlines(), [
-                    "v309=3.9.25", "v312=3.12.12", "v313=3.13.17", "v315=3.15.2",
+                    'versions=["3.9.25","3.12.12","3.13.17","3.14.1","3.15.2"]',
                 ])
 
     def test_python_matrix_jobs_use_runner_with_python_39_builds(self):

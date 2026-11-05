@@ -37,6 +37,10 @@ so adding or removing a configured series automatically updates the test matrix.
 It checks shell script syntax and runs the runtime updater's standard-library
 unit tests without installing the third-party packages being collected.
 
+`collection_series` lists the major.minor series collected by the Collect and
+SecurityScan matrices; the workflows resolve each to its latest stable build, so
+adding a series needs no workflow edit.
+
 Edit these lists to pin releases or add/remove Python major.minor series.
 To refresh them, run **Update Python runtime versions** from the Actions tab,
 selecting the branch to update. The workflow finds the latest stable release in
